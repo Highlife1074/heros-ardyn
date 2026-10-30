@@ -57,7 +57,10 @@ export function renderTable(ctx) {
   const send = async (askGm) => {
     const text = input.value.trim();
     if (text) { await postMessage(text, ooc); input.value = ""; input.style.height = "auto"; }
-    if (askGm) { const r = await fn("askGm", { campaignId: S.cid }); if (r.queued) toast("Le MJ répondra juste après."); }
+    if (askGm) {
+      if (!PLATFORM.apiKey) { toast(isHost() ? "Saisis d'abord la clé Claude dans ⚙️." : "L'hôte doit d'abord saisir la clé Claude.", "error"); return; }
+      const r = await fn("askGm", { campaignId: S.cid }); if (r.queued) toast("Le MJ termine une réponse, il enchaîne juste après.");
+    }
     else if (!text) toast("Écris d'abord ce que fait ton héros.");
   };
   sendBtn.onclick = busy(sendBtn, () => send(false));

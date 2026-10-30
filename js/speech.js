@@ -17,13 +17,14 @@ export const speakEnabled = () => on;
 /** Les navigateurs mobiles n'autorisent la voix qu'après un geste : à appeler dans un clic. */
 export function unlockSpeech() {
   const s = synth(); if (!s || !on) return;
-  try { const u = new SpeechSynthesisUtterance(" "); u.volume = 0; s.speak(u); } catch {}
+  try { if (s.paused) s.resume(); } catch {}
 }
 
 export function setSpeak(v) {
   on = v; try { localStorage.setItem("tts", v ? "on" : "off"); } catch {}
   const s = synth(); if (!s) return;
-  if (!v) { s.cancel(); return; }
+  s.cancel(); // vide une file éventuellement bloquée (bug connu de Chrome)
+  if (!v) return;
   speak("La voix du Maître du Jeu est activée.", true); // dit dans le geste de l'utilisateur : débloque le son
 }
 

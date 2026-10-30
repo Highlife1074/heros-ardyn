@@ -483,7 +483,7 @@ export async function runGm(cid, reason = "players", depth = 0) {
     }
     const narration = texts.join("\n\n").trim();
     if (narration) await addLog(cid, { type: "gm", authorName: "Maître du Jeu", portrait: "🐉", text: narration, model: usedModel });
-    if (fellBack) await cref.update({ "state.modelWarning": `${settings.model} n'est pas accessible sur Vertex AI : le MJ utilise ${usedModel} en attendant.` });
+    if (fellBack) await cref.update({ "state.modelWarning": `${settings.model} n'est pas accessible avec cette clé : le MJ utilise ${usedModel} en attendant.` });
     else if (c.state?.modelWarning) await cref.update({ "state.modelWarning": FieldValue.delete() });
     await cref.update({
       "state.lastGmAt": started,
@@ -491,16 +491,16 @@ export async function runGm(cid, reason = "players", depth = 0) {
       "usage.cacheRead": FieldValue.increment(usage.cacheRead), "usage.cacheWrite": FieldValue.increment(usage.cacheWrite),
       "usage.calls": FieldValue.increment(usage.calls), [`usage.byModel.${usedModel.replace(/\./g, "_")}`]: FieldValue.increment(usage.input + usage.output),
     });
-    await maybeSummarize(cid, settings);
+    try { await maybeSummarize(cid, settings); } catch (e) { logger.warn("Résumé non mis à jour", e); }
     return { ok: true };
   } catch (e) {
     logger.error("GM error", e);
     const why = e.status === 401 ? "clé Claude absente ou invalide : l'hôte doit la saisir dans ⚙️" : e.status === 403 ? "accès refusé par Anthropic (clé ou crédit)" : e.status === 404 ? "modèle introuvable (change de modèle dans ⚙️)" : e.status === 429 ? "trop de demandes, réessaie dans un instant" : e.status === 529 ? "service surchargé, réessaie" : e.status === 400 && /credit/i.test(e.message || "") ? "crédit Anthropic épuisé" : "erreur technique : " + String(e.message || "").slice(0, 120);
-    await addLog(cid, { type: "system", text: `⚠️ Le Maître du Jeu a eu un souci (${why}). Appuie à nouveau sur « Au MJ ».` });
-    return { error: e.message };
+    try { await addLog(cid, { type: "system", text: `⚠️ Le Maître du Jeu a eu un souci (${why}). Appuie à nouveau sur « Au MJ ».` }); } catch {}
+    return { error: why };
   } finally {
-    const after = (await cref.get()).data()?.state || {};
-    await cref.update({ "state.gmBusy": false });
+    let after = {};
+    try { after = (await cref.get()).data()?.state || {}; await cref.update({ "state.gmBusy": false }); } catch (e) { logger.warn(e); }
     if (after.gmRequested && depth < 1) await runGm(cid, "players", depth + 1);
   }
 }
@@ -525,7 +525,10 @@ export async function askGm(uid, { campaignId }) {
     return { queued: true };
   }
   // Le MJ tourne dans le navigateur de celui qui l'appelle ; le verrou évite deux MJ en parallèle.
-  runGm(campaignId, "players").catch((e) => logger.error(e));
+  // On attend sa réponse pour pouvoir afficher clairement tout problème.
+  const r = await runGm(campaignId, "players");
+  if (r?.error) throw new HttpsError("internal", r.error);
+  if (r?.busy) return { queued: true };
   return { ok: true };
 }
 
