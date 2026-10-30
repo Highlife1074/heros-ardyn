@@ -64,6 +64,7 @@ function renderHome() {
         h("div", { class: "seal" }, c.setting === "ardyn" ? "🐉" : "🗺️"),
         h("div", { class: "grow" }, h("b", {}, c.name), h("div", { class: "small muted" },
           `${(c.members || []).length} joueur${(c.members || []).length > 1 ? "s" : ""}`, c.ownerUid === S.user.uid ? " · tu es l'hôte" : "",
+          c.createdAt ? ` · créée le ${new Date(c.createdAt).toLocaleDateString("fr-FR")} à ${new Date(c.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}` : "",
           c.state?.lastGmAt ? ` · dernière partie ${timeAgo(c.state.lastGmAt)}` : "")),
         h("span", { class: "muted" }, "›"))))
       : [h("li", { class: "muted" }, "Aucune campagne pour l'instant. Crée la tienne ou rejoins celle d'un proche avec son code.")]));

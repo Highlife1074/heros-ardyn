@@ -143,7 +143,7 @@ export function renderTable(ctx) {
     const nodes = S.log.map(renderEntry);
     if (!S.log.length) nodes.push(h("div", { class: "entry system" }, h("p", {}, "La table est prête."),
       me ? h("p", {}, "Quand tout le monde a créé son personnage, appuyez sur « 🐉 Au MJ » pour commencer l'aventure.") : null));
-    if (!me) nodes.push(h("div", { class: "entry", style: { textAlign: "center" } }, h("button", { class: "btn primary", onclick: () => go(`#/c/${S.cid}/create`) }, "Créer mon personnage")));
+    if (!me && S.charsLoaded) nodes.push(h("div", { class: "entry", style: { textAlign: "center" } }, h("button", { class: "btn primary", onclick: () => go(`#/c/${S.cid}/create`) }, "Créer mon personnage")));
     logEl.replaceChildren(...nodes);
     if (nearBottom || S.log.length !== lastCount) logEl.scrollTop = logEl.scrollHeight;
     lastCount = S.log.length;
@@ -176,6 +176,7 @@ export function renderTable(ctx) {
     if (!S.campaign) return renderAll();
     if (what?.type === "log") { renderLog(what.fresh); return; }
     renderAll();
+    if (what === "chars" || what === "campaign") renderLog();
     // Vibre quand un jet m'est demandé
     const me = myChar(); const now = new Set((S.campaign.state?.pendingRolls || []).filter((p) => p.characterId === me?.id).map((p) => p.id));
     if ([...now].some((id) => !prevReq.has(id))) { navigator.vibrate?.([60, 40, 60]); }
@@ -197,6 +198,7 @@ async function pickWeapon(ch) {
 function sidePanel(which) {
   if (which === "sheet") {
     const me = myChar();
+    if (!me && !S.charsLoaded) return h("p", { class: "muted" }, "Chargement des héros…");
     if (!me) return h("div", { class: "stack" }, h("p", {}, "Tu n'as pas encore de personnage dans cette campagne."), h("button", { class: "btn primary", onclick: () => go(`#/c/${S.cid}/create`) }, "Créer mon personnage"));
     const box = h("div"); renderSheet(box, me, { compact: true }); return box;
   }

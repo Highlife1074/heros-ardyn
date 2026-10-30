@@ -16,7 +16,7 @@ export const fbApp = initializeApp(firebaseConfig);
 export const auth = getAuth(fbApp);
 // ignoreUndefinedProperties : un champ vide ne fait plus échouer une écriture.
 export const fs = initializeFirestore(fbApp, { ignoreUndefinedProperties: true });
-export const APP_VERSION = "2026-10-30 d";
+export const APP_VERSION = "2026-10-30 e";
 
 // ---------------------------------------------------------------- Plateforme pour la logique de jeu (js/server)
 // Même interface que l'ancienne version serveur : la logique n'a pas eu besoin d'être réécrite.
@@ -148,7 +148,14 @@ export const S = {
   cid: null, campaign: null, chars: {}, log: [], subs: [], world: null, entries: [], worldSubs: [], worldId: null,
   view: null, listeners: new Set(),
 };
-export const myChar = () => S.chars[S.campaign?.activeCharacters?.[S.user?.uid]] || null;
+/** Mon héros : celui marqué actif, sinon le plus récent que je possède dans cette campagne. */
+export const myChar = () => {
+  const uid = S.user?.uid; if (!uid) return null;
+  const active = S.chars[S.campaign?.activeCharacters?.[uid]];
+  if (active) return active;
+  return Object.values(S.chars).filter((c) => c.ownerUid === uid && c.alive !== false).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0] || null;
+};
+export const myCharsLoaded = () => S.charsLoaded;
 export const isHost = () => S.campaign?.ownerUid === S.user?.uid;
 export const activeChars = () => Object.values(S.campaign?.activeCharacters || {}).map((id) => S.chars[id]).filter(Boolean);
 
@@ -163,12 +170,12 @@ export async function loadRules() { await loadServer(); return S.rules; }
 export function openCampaign(cid) {
   if (S.cid === cid) return;
   closeCampaign();
-  S.cid = cid; S.campaignError = false; S.lastError = null;
+  S.cid = cid; S.campaignError = false; S.lastError = null; S.charsLoaded = false;
   S.subs.push(onSnapshot(doc(fs, "campaigns", cid), (snap) => { S.campaign = snap.exists() ? { id: snap.id, ...snap.data() } : null; watchWorld(S.campaign?.worldId); emit("campaign"); },
     (e) => { listenError("Lecture de la campagne")(e); S.campaign = null; S.campaignError = true; emit("campaign"); }));
   S.subs.push(onSnapshot(doc(fs, "campaigns", cid, "secret", "config"), (snap) => { PLATFORM.apiKey = snap.exists() ? snap.data().apiKey || "" : ""; emit("key"); }, () => {}));
   S.subs.push(onSnapshot(collection(fs, "campaigns", cid, "characters"), (snap) => {
-    S.chars = Object.fromEntries(snap.docs.map((d) => [d.id, { id: d.id, ...d.data() }])); emit("chars");
+    S.chars = Object.fromEntries(snap.docs.map((d) => [d.id, { id: d.id, ...d.data() }])); S.charsLoaded = true; emit("chars");
   }, listenError("Lecture des personnages")));
   let firstLog = true;
   S.subs.push(onSnapshot(query(collection(fs, "campaigns", cid, "log"), orderBy("tms", "desc"), limit(160)), (snap) => {
