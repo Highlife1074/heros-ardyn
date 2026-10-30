@@ -16,7 +16,7 @@ export const fbApp = initializeApp(firebaseConfig);
 export const auth = getAuth(fbApp);
 // ignoreUndefinedProperties : un champ vide ne fait plus échouer une écriture.
 export const fs = initializeFirestore(fbApp, { ignoreUndefinedProperties: true });
-export const APP_VERSION = "2026-10-30 e";
+export const APP_VERSION = "2026-10-30 f";
 
 // ---------------------------------------------------------------- Plateforme pour la logique de jeu (js/server)
 // Même interface que l'ancienne version serveur : la logique n'a pas eu besoin d'être réécrite.
@@ -177,10 +177,13 @@ export function openCampaign(cid) {
   S.subs.push(onSnapshot(collection(fs, "campaigns", cid, "characters"), (snap) => {
     S.chars = Object.fromEntries(snap.docs.map((d) => [d.id, { id: d.id, ...d.data() }])); S.charsLoaded = true; emit("chars");
   }, listenError("Lecture des personnages")));
-  let firstLog = true;
+  // « Nouveaux » messages = ceux jamais vus depuis l'ouverture, y compris ceux écrits par ce navigateur
+  // (le MJ tourne chez celui qui appuie sur « Au MJ » : ses réponses doivent aussi être lues à voix haute).
+  let seen = null;
   S.subs.push(onSnapshot(query(collection(fs, "campaigns", cid, "log"), orderBy("tms", "desc"), limit(160)), (snap) => {
-    const fresh = firstLog ? [] : snap.docChanges().filter((c) => c.type === "added" && !snap.metadata.hasPendingWrites).map((c) => ({ id: c.doc.id, ...c.doc.data() }));
-    firstLog = false;
+    const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const fresh = seen ? docs.filter((d) => !seen.has(d.id)).reverse() : [];
+    seen = new Set([...(seen || []), ...docs.map((d) => d.id)]);
     S.log = snap.docs.map((d) => ({ id: d.id, ...d.data() })).reverse();
     emit({ type: "log", fresh });
   }, listenError("Lecture du journal")));

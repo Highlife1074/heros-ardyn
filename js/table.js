@@ -7,19 +7,8 @@ import { codexList } from "./world.js";
 import { micButton } from "./voice.js";
 
 const R = () => S.rules;
-let speakOn = false;
-try { speakOn = localStorage.getItem("tts") === "on"; } catch {}
-
-export function setSpeak(on) { speakOn = on; try { localStorage.setItem("tts", on ? "on" : "off"); } catch {} }
-export const speakEnabled = () => speakOn;
-export function speak(text) {
-  if (!speakOn || !("speechSynthesis" in window)) return;
-  const u = new SpeechSynthesisUtterance(text.replace(/\*\*/g, "").replace(/[#*_>]/g, ""));
-  u.lang = "fr-FR"; u.rate = 1.0;
-  const v = speechSynthesis.getVoices().find((x) => x.lang?.startsWith("fr"));
-  if (v) u.voice = v;
-  speechSynthesis.speak(u);
-}
+export { speak, setSpeak, speakEnabled } from "./speech.js";
+import { speak, setSpeak, speakEnabled, unlockSpeech, speechSupported } from "./speech.js";
 
 // ---------------------------------------------------------------- Journal
 export function renderEntry(e) {
@@ -71,7 +60,7 @@ export function renderTable(ctx) {
     else if (!text) toast("Écris d'abord ce que fait ton héros.");
   };
   sendBtn.onclick = busy(sendBtn, () => send(false));
-  gmBtn.onclick = busy(gmBtn, () => send(true));
+  gmBtn.onclick = busy(gmBtn, () => { unlockSpeech(); return send(true); });
   diceBtn.onclick = freeDice;
   sendBtn.className = "btn small ghost";
   const composer = h("div", { class: "composer" }, h("div", { class: "inner" }, diceBtn, micButton(input), input, gmBtn),
@@ -82,8 +71,12 @@ export function renderTable(ctx) {
 
   const titleEl = h("span", { class: "title grow" });
   const hostBtn = h("button", { class: "icon-btn hidden", title: "Réglages de l'hôte", "aria-label": "Réglages", onclick: () => go(`#/c/${S.cid}/host`) }, "⚙️");
-  const ttsBtn = h("button", { class: "icon-btn", title: "Lecture à voix haute du MJ", "aria-pressed": String(speakOn) }, speakOn ? "🔊" : "🔈");
-  ttsBtn.onclick = () => { speakOn = !speakOn; try { localStorage.setItem("tts", speakOn ? "on" : "off"); } catch {} ttsBtn.textContent = speakOn ? "🔊" : "🔈"; if (!speakOn) speechSynthesis?.cancel(); };
+  const ttsBtn = h("button", { class: "icon-btn", title: "Voix du MJ : lire ses réponses à voix haute", "aria-label": "Voix du MJ", "aria-pressed": String(speakEnabled()) }, speakEnabled() ? "🔊" : "🔈");
+  ttsBtn.onclick = () => {
+    if (!speechSupported()) return toast("Ce navigateur ne sait pas lire à voix haute.", "error");
+    setSpeak(!speakEnabled()); ttsBtn.textContent = speakEnabled() ? "🔊" : "🔈"; ttsBtn.setAttribute("aria-pressed", String(speakEnabled()));
+    toast(speakEnabled() ? "Voix du MJ activée sur cet appareil." : "Voix du MJ coupée.");
+  };
 
   const main = h("div", { class: "game-main" }, sceneEl, initEl, logEl, mainPanel, reqEl, keyWarn, thinking, composer, bottom);
   ctx.mount(

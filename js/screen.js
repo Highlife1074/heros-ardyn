@@ -1,7 +1,8 @@
 // Écran de table : une tablette ou une TV posée au milieu. Gros texte, lecture à voix haute, dés de tout le monde.
 import { S, go, activeChars, MOOD_ICON } from "./core.js";
 import { h } from "./ui.js";
-import { renderEntry, speak, setSpeak, speakEnabled } from "./table.js";
+import { renderEntry } from "./table.js";
+import { speak, setSpeak, speakEnabled } from "./speech.js";
 import { animateRoll } from "./dice3d.js";
 import { derive } from "./engine.js";
 
@@ -14,7 +15,7 @@ export function renderScreen(ctx) {
   const combat = h("div", { class: "initiative hidden", style: { padding: "10px 6vw" } });
   const wake = h("button", { class: "btn small", title: "Garder l'écran allumé" }, "☀️ Écran allumé");
   const voice = h("button", { class: "btn small", "aria-pressed": String(speakEnabled()) }, speakEnabled() ? "🔊 Voix du MJ" : "🔈 Voix du MJ");
-  voice.onclick = () => { setSpeak(!speakEnabled()); voice.textContent = speakEnabled() ? "🔊 Voix du MJ" : "🔈 Voix du MJ"; if (speakEnabled()) speak("La voix du Maître du Jeu est activée."); };
+  voice.onclick = () => { setSpeak(!speakEnabled()); voice.textContent = speakEnabled() ? "🔊 Voix du MJ" : "🔈 Voix du MJ"; };
   let lock = null;
   wake.onclick = async () => { try { lock = await navigator.wakeLock?.request("screen"); wake.textContent = "☀️ Activé"; } catch { wake.textContent = "Non disponible"; } };
   ctx.addCleanup(() => lock?.release?.());
