@@ -249,16 +249,21 @@ body.screen-mode { font-size: 22px; }
 .scene-card { position: relative; flex: none; height: 150px; overflow: hidden; border-bottom: 1px solid var(--line); background: #10141c; transition: height .3s ease; }
 .scene-card.compact { height: 58px; }
 .scene-card.big { height: 32vh; min-height: 180px; }
-.scene-card .art, .scene-card .art svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-.scene-card .cap { position: absolute; left: 14px; bottom: 9px; right: 150px; color: #f3ead6; text-shadow: 0 1px 3px rgba(0, 0, 0, .85); min-width: 0; }
+.scene-card .art, .scene-card .art .layer, .scene-card .art svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.scene-card .art canvas.painted { object-fit: cover; opacity: 0; transition: opacity .8s ease; }
+.scene-card .art canvas.painted.on { opacity: 1; }
+/* Cadre doré, façon jeu de rôle sur ordinateur */
+.scene-card::after { content: ""; position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 0 1px #0b0805, inset 0 0 0 3px #a87b3c, inset 0 0 0 4px #e3c27a, inset 0 0 0 5px #5a3d17, inset 0 0 0 6px #0b0805, inset 0 0 50px rgba(0, 0, 0, .55); }
+.scene-card .cap .name { color: #f1d9a0; letter-spacing: .02em; font-variant: small-caps; }
+.scene-card .cap { z-index: 1; position: absolute; left: 14px; bottom: 9px; right: 150px; color: #f3ead6; text-shadow: 0 1px 3px rgba(0, 0, 0, .85); min-width: 0; }
 .scene-card .cap .name { font-family: var(--serif); font-weight: 800; font-size: 1.3rem; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .scene-card .cap .sub { font-size: .85rem; opacity: .9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .scene-card.compact .cap { bottom: 6px; right: 120px; }
 .scene-card.compact .cap .name { font-size: 1.05rem; }
 .scene-card.compact .cap .sub, .scene-card.compact .minimap { display: none; }
-.scene-card .minimap { position: absolute; right: 10px; bottom: 10px; width: 126px; height: 88px; padding: 0; border: 2px solid #c79342; border-radius: 6px; overflow: hidden; cursor: pointer; background: #d7c08f; box-shadow: 0 2px 10px rgba(0, 0, 0, .5); }
+.scene-card .minimap { z-index: 2; position: absolute; right: 10px; bottom: 10px; width: 126px; height: 88px; padding: 0; border: 2px solid #c79342; border-radius: 6px; overflow: hidden; cursor: pointer; background: #d7c08f; box-shadow: 0 2px 10px rgba(0, 0, 0, .5); }
 .scene-card .minimap svg { width: 100%; height: 100%; display: block; }
-.scene-tools { position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; }
+.scene-tools { z-index: 2; position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; }
 .scene-tool { width: 36px; height: 36px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .25); background: rgba(10, 14, 22, .55); color: #f3ead6; cursor: pointer; font-size: 1rem; backdrop-filter: blur(3px); }
 .scene-tool:hover { background: rgba(10, 14, 22, .8); }
 .scene-card.compact .scene-tools { top: 11px; }

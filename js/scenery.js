@@ -81,19 +81,26 @@ function tower(x, y, w, h, c, { flag = null, roof = null, lit = false } = {}) {
   if (flag) { const top = y - h - (roof ? w * 1.1 : 5); s += `<path d="M${f1(x + w / 2)},${f1(top)} v-18" stroke="${c}" stroke-width="1.5"/><path d="M${f1(x + w / 2)},${f1(top - 18)} q8,-3 16,1 q-8,3 -16,7z" fill="${flag}"><animateTransform attributeName="transform" type="skewY" values="0;6;-4;0" dur="2.4s" repeatCount="indefinite"/></path>`; }
   return s;
 }
+let FX = []; // éléments animés : dessinés au-dessus du fond peint
 function fire(x, y, s) {
-  return `<g transform="translate(${f1(x)} ${f1(y)})"><circle r="${f1(s * 3)}" fill="#ff9a3c" opacity=".18"><animate attributeName="opacity" values=".14;.24;.16;.22;.14" dur="1.7s" repeatCount="indefinite"/></circle>
+  FX.push(`<g transform="translate(${f1(x)} ${f1(y)})"><circle r="${f1(s * 1.6)}" fill="#ff9a3c" opacity=".18"><animate attributeName="opacity" values=".14;.24;.16;.22;.14" dur="1.7s" repeatCount="indefinite"/></circle>
     <g><animateTransform attributeName="transform" type="scale" values="1 1;1.06 1.18;.95 .92;1.03 1.1;1 1" dur=".7s" repeatCount="indefinite"/>
     <path d="M0,0 C${f1(-s * 0.7)},0 ${f1(-s * 0.8)},${f1(-s * 0.7)} 0,${f1(-s * 1.7)} C${f1(s * 0.8)},${f1(-s * 0.7)} ${f1(s * 0.7)},0 0,0Z" fill="#f2672a"/>
-    <path d="M0,0 C${f1(-s * 0.4)},0 ${f1(-s * 0.45)},${f1(-s * 0.5)} 0,${f1(-s * 1.1)} C${f1(s * 0.45)},${f1(-s * 0.5)} ${f1(s * 0.4)},0 0,0Z" fill="#ffd166"/></g></g>`;
+    <path d="M0,0 C${f1(-s * 0.4)},0 ${f1(-s * 0.45)},${f1(-s * 0.5)} 0,${f1(-s * 1.1)} C${f1(s * 0.45)},${f1(-s * 0.5)} ${f1(s * 0.4)},0 0,0Z" fill="#ffd166"/></g></g>`);
+  return `<circle cx="${f1(x)}" cy="${f1(y - s * 0.6)}" r="${f1(s * 1.3)}" fill="#ffb35c" opacity=".22"/><ellipse cx="${f1(x)}" cy="${f1(y)}" rx="${f1(s * 0.9)}" ry="${f1(s * 0.25)}" fill="#ffcf6b" opacity=".6"/>`;
 }
 function smoke(x, y, s = 1) {
-  return [0, 1.3, 2.6].map((d) => `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(3 * s)}" fill="#cfd3d6" opacity="0"><animate attributeName="cy" values="${y};${y - 45 * s}" dur="3.9s" begin="${d}s" repeatCount="indefinite"/><animate attributeName="cx" values="${x};${x + 14 * s}" dur="3.9s" begin="${d}s" repeatCount="indefinite"/><animate attributeName="r" values="${3 * s};${9 * s}" dur="3.9s" begin="${d}s" repeatCount="indefinite"/><animate attributeName="opacity" values=".45;0" dur="3.9s" begin="${d}s" repeatCount="indefinite"/></circle>`).join("");
+  FX.push([0, 1.3, 2.6].map((d) => `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(3 * s)}" fill="#cfd3d6" opacity="0"><animate attributeName="cy" values="${y};${y - 45 * s}" dur="3.9s" begin="${d}s" repeatCount="indefinite"/><animate attributeName="cx" values="${x};${x + 14 * s}" dur="3.9s" begin="${d}s" repeatCount="indefinite"/><animate attributeName="r" values="${3 * s};${9 * s}" dur="3.9s" begin="${d}s" repeatCount="indefinite"/><animate attributeName="opacity" values=".45;0" dur="3.9s" begin="${d}s" repeatCount="indefinite"/></circle>`).join(""));
+  return "";
 }
 const torch = (x, y) => `<rect x="${x - 2}" y="${y}" width="4" height="16" fill="#3b2a1a"/>${fire(x, y, 7)}`;
 
 // ---------------------------------------------------------------- Composition
-export function renderScenery(sc, idp = "s") {
+export function renderScenery(sc, idp = "s") { const l = renderSceneryLayers(sc, idp); return l.base.replace("</svg>", l.fxInner + "</svg>"); }
+
+/** Deux couches : le fond (fixe, que l'on peut repeindre) et les effets animés à poser par-dessus. */
+export function renderSceneryLayers(sc, idp = "s") {
+  FX = [];
   const p = sceneParams(sc);
   const r = rng(p.seed);
   const id = (n) => `${idp}-${n}`;
@@ -104,11 +111,15 @@ export function renderScenery(sc, idp = "s") {
   if (p.weather === "neige" || p.weather === "nuages") { sky.top = mix(sky.top, "#7d8794", 0.4); sky.bot = mix(sky.bot, "#c3c9cf", 0.4); }
   const night = p.time === "nuit", lit = night || p.time === "crepuscule";
   const L = sky.light;
-  const haze = p.weather === "brume" ? 0.75 : 0.5;
+  const hazeK = p.weather === "brume" ? 0.75 : 0.5;
   /** Teinte d'un plan : couleur de base assombrie selon l'heure, fondue dans le ciel selon la profondeur (0 = proche). */
-  const tone = (base, depth) => mix(mix(base, "#0b1020", 1 - L), sky.bot, depth * haze);
+  const tone = (base, depth) => mix(mix(base, "#0b1020", 1 - L), sky.bot, depth * hazeK);
   const ground = GROUND[p.setting] || GROUND.plaine;
-  const g = [];
+  const g = [], defs = [];
+  /** Plan éclairé par le haut (lumière du ciel) et assombri à sa base, comme un fond peint. */
+  const litFill = (c) => { const k = id("l" + defs.length); defs.push(`<linearGradient id="${k}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${mix(c, sky.sun, 0.22 * L)}"/><stop offset=".35" stop-color="${c}"/><stop offset="1" stop-color="${mix(c, "#000000", 0.35)}"/></linearGradient>`); return `url(#${k})`; };
+  const haze = (y, k = 0.3) => g.push(`<rect x="-20" y="${f1(y - 25)}" width="${W + 40}" height="50" fill="${sky.bot}" opacity="${f1(k)}" filter="url(#${id("blur")})"/>`);
+  let sun = null;
   g.push(`<defs><linearGradient id="${id("sky")}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${sky.top}"/><stop offset="1" stop-color="${sky.bot}"/></linearGradient>
     <linearGradient id="${id("water")}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${mix(sky.bot, "#2d5d74", 0.35)}"/><stop offset="1" stop-color="${mix(sky.top, "#0e2a3a", 0.5)}"/></linearGradient>
     <linearGradient id="${id("shade")}" x1="0" y1="0" x2="0" y2="1"><stop offset=".45" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".62"/></linearGradient>
@@ -123,6 +134,7 @@ export function renderScenery(sc, idp = "s") {
     if (night && !wet) for (let i = 0; i < 70; i++) { const x = r() * W, y = r() * H * 0.55, s = r() * 1.2 + 0.3; g.push(`<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(s)}" fill="#fff" opacity="${f1(0.4 + r() * 0.6)}">${r() < 0.25 ? `<animate attributeName="opacity" values="1;.2;1" dur="${f1(2 + r() * 3)}s" repeatCount="indefinite"/>` : ""}</circle>`); }
     if (!wet && p.weather !== "brume") {
       const sx = p.time === "aube" ? 140 : p.time === "crepuscule" ? 650 : 560 + r() * 120, sy = p.time === "jour" ? 55 : night ? 60 : 150;
+      sun = { x: sx, y: sy };
       g.push(`<circle cx="${f1(sx)}" cy="${sy}" r="${night ? 60 : 90}" fill="${sky.sun}" opacity=".18" filter="url(#${id("blur")})"/><circle cx="${f1(sx)}" cy="${sy}" r="${night ? 16 : 24}" fill="${sky.sun}"/>`);
       if (night) g.push(`<circle cx="${f1(sx + 7)}" cy="${sy - 4}" r="14" fill="${sky.top}" opacity=".9"/>`);
     }
@@ -133,14 +145,15 @@ export function renderScenery(sc, idp = "s") {
       g.push(`<g opacity="${wet ? 0.9 : 0.55}"><animateTransform attributeName="transform" type="translate" values="0 0;${W * 0.25} 0;0 0" dur="${f1(dur)}s" repeatCount="indefinite"/><ellipse cx="${f1(x)}" cy="${f1(y)}" rx="${f1(s * 1.6)}" ry="${f1(s * 0.4)}" fill="${cc}" filter="url(#${id("soft")})"/><ellipse cx="${f1(x + s * 0.4)}" cy="${f1(y - s * 0.18)}" rx="${f1(s * 0.8)}" ry="${f1(s * 0.35)}" fill="${cc}" filter="url(#${id("soft")})"/></g>`);
     }
   };
-  const farHills = (y = 190, amp = 40, base = ground) => { const rd = ridge(r, y, amp, { freq: 1.2 }); g.push(`<path d="${rd.d}" fill="${tone(mix(base, "#6d7f99", 0.5), 0.85)}"/>`); return rd; };
+  const farHills = (y = 190, amp = 40, base = ground) => { const rd = ridge(r, y, amp, { freq: 1.2 }); g.push(`<path d="${rd.d}" fill="${litFill(tone(mix(base, "#6d7f99", 0.5), 0.85))}"/>`); haze(y + 10, 0.25); return rd; };
   const peaks = (y = 175, amp = 90, snow = true) => {
     const rd = ridge(r, y, amp, { step: 26, freq: 1.6, sharp: true });
-    g.push(`<path d="${rd.d}" fill="${tone("#7b7f8c", 0.75)}"/>`);
-    if (snow) { const cid = id("snow" + g.length); g.push(`<clipPath id="${cid}"><rect y="0" width="${W}" height="${f1(y - amp * 0.28)}"/></clipPath><path d="${rd.d}" clip-path="url(#${cid})" fill="${mix("#ffffff", sky.bot, night ? 0.55 : 0.2)}"/>`); }
+    g.push(`<path d="${rd.d}" fill="${litFill(tone("#5f6270", 0.5))}"/>`);
+    if (snow) { const cid = id("snow" + g.length); g.push(`<clipPath id="${cid}"><rect y="0" width="${W}" height="${f1(y - amp * 0.28)}"/></clipPath><path d="${rd.d}" clip-path="url(#${cid})" fill="${mix(mix("#ffffff", sky.bot, night ? 0.55 : 0.25), tone("#5f6270", 0.5), 0.2)}"/>`); }
+    haze(y + 15, 0.3);
     return rd;
   };
-  const groundLayer = (y = 240, amp = 14, base = ground) => { const rd = ridge(r, y, amp, { freq: 0.8 }); g.push(`<path d="${rd.d}" fill="${tone(base, 0)}"/>`); return rd; };
+  const groundLayer = (y = 240, amp = 14, base = ground) => { const rd = ridge(r, y, amp, { freq: 0.8 }); g.push(`<path d="${rd.d}" fill="${litFill(tone(base, 0))}"/>`); return rd; };
   const grass = (rd, n = 40, base = ground) => { const c = tone(mix(base, "#1d2b12", 0.4), 0); for (let i = 0; i < n; i++) { const x = r() * W, y = yAt(rd.pts, x) + 6 + r() * 50; g.push(`<path d="M${f1(x)},${f1(y)} l-3,-8 M${f1(x)},${f1(y)} l1,-10 M${f1(x)},${f1(y)} l4,-7" stroke="${c}" stroke-width="1.2"/>`); } };
   const forestRow = (y, h, depth, n = 34, kind = "pine") => { const c = tone(ground, depth); for (let i = 0; i < n; i++) { const x = (i / n) * W + (r() - 0.5) * 20, hh = h * (0.7 + r() * 0.5); g.push(kind === "pine" ? pine(x, y + r() * 8, hh, c) : oak(x, y + r() * 8, hh, c)); } };
 
@@ -175,7 +188,7 @@ export function renderScenery(sc, idp = "s") {
     g.push(`<path d="M0,0 H${W} V${H} H0Z M200,${H} C190,200 240,110 330,95 C420,80 520,90 580,150 C640,210 620,270 610,${H}Z" fill="#1e1b18" fill-rule="evenodd"/>`);
     for (let i = 0; i < 14; i++) { const x = 220 + r() * 380, l = 15 + r() * 40, y = 70 + Math.abs(x - 400) * 0.25; g.push(`<path d="M${f1(x - 7)},${f1(y)} L${f1(x)},${f1(y + l)} L${f1(x + 7)},${f1(y)}Z" fill="#1e1b18"/>`); }
     g.push(`<path d="M150,${H} C220,250 300,240 400,250 C500,240 600,255 660,${H}Z" fill="#2b2723"/>`);
-    for (const [x, d] of [[310, 0], [470, 1.6]]) g.push(`<circle cx="${x}" cy="105" r="2" fill="#9ec3d6"><animate attributeName="cy" values="105;260" dur="1.4s" begin="${d}s" repeatCount="indefinite"/><animate attributeName="opacity" values="1;1;0" dur="1.4s" begin="${d}s" repeatCount="indefinite"/></circle>`);
+    for (const [x, d] of [[310, 0], [470, 1.6]]) FX.push(`<circle cx="${x}" cy="105" r="2" fill="#9ec3d6"><animate attributeName="cy" values="105;260" dur="1.4s" begin="${d}s" repeatCount="indefinite"/><animate attributeName="opacity" values="1;1;0" dur="1.4s" begin="${d}s" repeatCount="indefinite"/></circle>`);
   } else {
     outdoorSky();
     if (["montagne", "neige"].includes(S)) {
@@ -185,8 +198,8 @@ export function renderScenery(sc, idp = "s") {
       else for (let i = 0; i < 6; i++) { const x = r() * W, y = yAt(gr.pts, x) + 20 + r() * 20, s = 20 + r() * 30; g.push(`<path d="M${f1(x - s)},${f1(y)} L${f1(x - s * 0.3)},${f1(y - s * 0.7)} L${f1(x + s * 0.5)},${f1(y - s * 0.5)} L${f1(x + s)},${f1(y)}Z" fill="${tone("#4b4842", 0)}"/>`); }
       void mid;
     } else if (S === "desert") {
-      for (const [y, a, d, c] of [[200, 25, 0.7, "#e6c38a"], [235, 30, 0.35, "#d8ad6a"], [270, 20, 0, "#c99a55"]]) { const rd = ridge(r, y, a, { freq: 0.7, step: 20 }); g.push(`<path d="${rd.d}" fill="${tone(c, d)}"/>`); }
-      if (!night) g.push(`<rect y="150" width="${W}" height="40" fill="${sky.sun}" opacity=".08" filter="url(#${id("blur")})"><animate attributeName="opacity" values=".04;.12;.04" dur="4s" repeatCount="indefinite"/></rect>`);
+      for (const [y, a, d, c] of [[200, 25, 0.7, "#e6c38a"], [235, 30, 0.35, "#d8ad6a"], [270, 20, 0, "#c99a55"]]) { const rd = ridge(r, y, a, { freq: 0.7, step: 20 }); g.push(`<path d="${rd.d}" fill="${litFill(tone(c, d))}"/>`); }
+      if (!night) FX.push(`<rect y="150" width="${W}" height="40" fill="${sky.sun}" opacity=".08" filter="url(#${id("blur")})"><animate attributeName="opacity" values=".04;.12;.04" dur="4s" repeatCount="indefinite"/></rect>`);
       g.push(`<path d="M610,205 l12,-40 l6,0 l4,-14 l6,14 l4,0 l10,40z" fill="${tone("#a4875a", 0.6)}"/>`);
     } else if (["mer", "port"].includes(S)) {
       const hz = S === "port" ? 190 : 170;
@@ -207,7 +220,7 @@ export function renderScenery(sc, idp = "s") {
       for (let i = 0; i < 7; i++) { const x = r() * W, y = 220 + r() * 70; g.push(`<ellipse cx="${f1(x)}" cy="${f1(y)}" rx="${f1(30 + r() * 50)}" ry="6" fill="${tone(ground, 0.05)}"/>`); }
       for (let i = 0; i < 5; i++) g.push(deadTree(r() * W, 235 + r() * 50, 70 + r() * 60, tone("#2b261d", 0)));
       for (let i = 0; i < 30; i++) { const x = r() * W, y = 240 + r() * 60; g.push(`<path d="M${f1(x)},${f1(y)} l-2,-16 M${f1(x + 3)},${f1(y)} l1,-20 M${f1(x + 6)},${f1(y)} l3,-14" stroke="${tone("#3d4a28", 0)}" stroke-width="1.5"/>`); }
-      for (let i = 0; i < 5; i++) { const x = r() * W, y = 180 + r() * 80; g.push(`<circle cx="${f1(x)}" cy="${f1(y)}" r="3" fill="#b6f0c8"><animate attributeName="opacity" values="0;.9;0" dur="${f1(3 + r() * 3)}s" begin="${f1(r() * 3)}s" repeatCount="indefinite"/><animateTransform attributeName="transform" type="translate" values="0 0;${f1((r() - 0.5) * 40)} ${f1((r() - 0.5) * 20)};0 0" dur="7s" repeatCount="indefinite"/></circle>`); }
+      for (let i = 0; i < 5; i++) { const x = r() * W, y = 180 + r() * 80; FX.push(`<circle cx="${f1(x)}" cy="${f1(y)}" r="3" fill="#b6f0c8"><animate attributeName="opacity" values="0;.9;0" dur="${f1(3 + r() * 3)}s" begin="${f1(r() * 3)}s" repeatCount="indefinite"/><animateTransform attributeName="transform" type="translate" values="0 0;${f1((r() - 0.5) * 40)} ${f1((r() - 0.5) * 20)};0 0" dur="7s" repeatCount="indefinite"/></circle>`); }
     } else {
       const far = ["colline", "plaine", "route", "riviere", "village", "chateau", "temple", "camp", "ruines", "foret", "ville"].includes(S);
       if (far && r() < 0.6 && S !== "ville") peaks(185, 55, true); else if (far) farHills(185, 35);
@@ -253,7 +266,7 @@ export function renderScenery(sc, idp = "s") {
         for (const [x, s] of [[170, 70], [560, 80], [660, 55]]) { const y = yAt(gr.pts, x) + 12; g.push(`<path d="M${x - s * 0.6},${f1(y)} L${x},${f1(y - s * 0.8)} L${x + s * 0.6},${f1(y)}Z" fill="${tone("#b49a6a", 0.05)}"/><path d="M${x - s * 0.12},${f1(y)} L${x},${f1(y - s * 0.5)} L${x + s * 0.12},${f1(y)}Z" fill="${tone("#2a1e12", 0)}"/>`); }
         const y = yAt(gr.pts, 380) + 40;
         g.push(`<path d="M352,${f1(y + 4)} l56,-8 M354,${f1(y - 4)} l52,8" stroke="#3b2a1a" stroke-width="5"/>${fire(380, y, 20)}`);
-        for (let i = 0; i < 4; i++) g.push(`<circle cx="380" cy="${f1(y - 20)}" r="1.5" fill="#ffd166"><animate attributeName="cy" values="${f1(y - 20)};${f1(y - 90)}" dur="${f1(1.5 + r())}s" begin="${f1(r() * 2)}s" repeatCount="indefinite"/><animate attributeName="cx" values="380;${f1(370 + r() * 30)}" dur="2s" repeatCount="indefinite"/><animate attributeName="opacity" values="1;0" dur="1.8s" repeatCount="indefinite"/></circle>`);
+        for (let i = 0; i < 4; i++) FX.push(`<circle cx="380" cy="${f1(y - 20)}" r="1.5" fill="#ffd166"><animate attributeName="cy" values="${f1(y - 20)};${f1(y - 90)}" dur="${f1(1.5 + r())}s" begin="${f1(r() * 2)}s" repeatCount="indefinite"/><animate attributeName="cx" values="380;${f1(370 + r() * 30)}" dur="2s" repeatCount="indefinite"/><animate attributeName="opacity" values="1;0" dur="1.8s" repeatCount="indefinite"/></circle>`);
       }
       if (S === "foret") { for (const x of [-10, 40, 720, 790]) g.push(pine(x, H + 10, 230 + r() * 60, tone(ground, 0) )); if (p.time === "jour" && !wet) g.push(`<path d="M470,0 L560,0 L420,${H} L300,${H}Z" fill="#fff6d5" opacity=".07"/><path d="M600,0 L640,0 L560,${H} L500,${H}Z" fill="#fff6d5" opacity=".06"/>`); }
       if (["plaine", "colline", "riviere", "route", "village", "camp"].includes(S)) for (let i = 0; i < 3; i++) { const x = r() * W; g.push(oak(x, yAt(gr.pts, x) + 10 + r() * 20, 40 + r() * 30, tone(mix(ground, "#1e3014", 0.5), 0))); }
@@ -268,17 +281,17 @@ export function renderScenery(sc, idp = "s") {
     const drops = Array.from({ length: snow ? 70 : wet && p.weather === "orage" ? 140 : 90 }, () => [r() * (W + 100), r() * H]);
     const shape = (x, y) => (snow ? `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(1 + r() * 1.8)}"/>` : `<path d="M${f1(x)},${f1(y)} l-4,14"/>`);
     const layer = drops.map(([x, y]) => shape(x, y)).join("") + drops.map(([x, y]) => shape(x, y - H)).join("");
-    g.push(`<g fill="#ffffff" stroke="${snow ? "none" : "#c9d6e3"}" stroke-width="1" opacity="${snow ? 0.85 : 0.5}"><animateTransform attributeName="transform" type="translate" values="0 0;${snow ? 40 : -60} ${H}" dur="${snow ? 9 : 0.7}s" repeatCount="indefinite"/>${layer}</g>`);
+    FX.push(`<g fill="#ffffff" stroke="${snow ? "none" : "#c9d6e3"}" stroke-width="1" opacity="${snow ? 0.85 : 0.5}"><animateTransform attributeName="transform" type="translate" values="0 0;${snow ? 40 : -60} ${H}" dur="${snow ? 9 : 0.7}s" repeatCount="indefinite"/>${layer}</g>`);
   }
-  if (p.weather === "orage" && !inside) g.push(`<rect width="${W}" height="${H}" fill="#eef3ff" opacity="0"><animate attributeName="opacity" values="0;0;.75;0;.5;0;0" keyTimes="0;.8;.81;.83;.85;.88;1" dur="9s" repeatCount="indefinite"/></rect>`);
+  if (p.weather === "orage" && !inside) FX.push(`<rect width="${W}" height="${H}" fill="#eef3ff" opacity="0"><animate attributeName="opacity" values="0;0;.75;0;.5;0;0" keyTimes="0;.8;.81;.83;.85;.88;1" dur="9s" repeatCount="indefinite"/></rect>`);
   if ((p.weather === "brume" && !inside) || p.mood === "mystère") {
     const fc = p.mood === "mystère" && p.weather !== "brume" ? "#8f7fb3" : "#dfe4e7";
-    for (let i = 0; i < 4; i++) g.push(`<ellipse cx="${f1(r() * W)}" cy="${f1(200 + r() * 80)}" rx="${f1(220 + r() * 120)}" ry="28" fill="${fc}" opacity="${p.weather === "brume" ? 0.4 : 0.22}" filter="url(#${id("blur")})"><animateTransform attributeName="transform" type="translate" values="-60 0;60 0;-60 0" dur="${f1(25 + r() * 20)}s" repeatCount="indefinite"/></ellipse>`);
+    for (let i = 0; i < 4; i++) FX.push(`<ellipse cx="${f1(r() * W)}" cy="${f1(200 + r() * 80)}" rx="${f1(220 + r() * 120)}" ry="28" fill="${fc}" opacity="${p.weather === "brume" ? 0.4 : 0.22}" filter="url(#${id("blur")})"><animateTransform attributeName="transform" type="translate" values="-60 0;60 0;-60 0" dur="${f1(25 + r() * 20)}s" repeatCount="indefinite"/></ellipse>`);
   }
-  if (p.weather === "vent" && !inside) for (let i = 0; i < 8; i++) { const y = 60 + r() * 200; g.push(`<path d="M0,${f1(y)} q60,-10 120,0 t120,0" stroke="#ffffff" stroke-width="1.2" fill="none" opacity="0"><animateTransform attributeName="transform" type="translate" values="-150 0;${W} 0" dur="${f1(2 + r() * 2)}s" begin="${f1(r() * 3)}s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;.35;0" dur="${f1(2 + r() * 2)}s" begin="${f1(r() * 3)}s" repeatCount="indefinite"/></path>`); }
+  if (p.weather === "vent" && !inside) for (let i = 0; i < 8; i++) { const y = 60 + r() * 200; FX.push(`<path d="M0,${f1(y)} q60,-10 120,0 t120,0" stroke="#ffffff" stroke-width="1.2" fill="none" opacity="0"><animateTransform attributeName="transform" type="translate" values="-150 0;${W} 0" dur="${f1(2 + r() * 2)}s" begin="${f1(r() * 3)}s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;.35;0" dur="${f1(2 + r() * 2)}s" begin="${f1(r() * 3)}s" repeatCount="indefinite"/></path>`); }
 
   // Ambiance
-  if (p.mood === "combat") g.push(`<rect width="${W}" height="${H}" fill="url(#${id("red")})"><animate attributeName="opacity" values=".7;1;.7" dur="1.6s" repeatCount="indefinite"/></rect>`);
+  if (p.mood === "combat") FX.push(`<rect width="${W}" height="${H}" fill="url(#${id("red")})"><animate attributeName="opacity" values=".7;1;.7" dur="1.6s" repeatCount="indefinite"/></rect>`);
   if (p.mood === "danger") g.push(`<rect width="${W}" height="${H}" fill="url(#${id("vig")})"/><rect width="${W}" height="${H}" fill="url(#${id("red")})" opacity=".5"/>`);
   if (p.mood === "tension") g.push(`<rect width="${W}" height="${H}" fill="url(#${id("vig")})" opacity=".8"/>`);
   if (p.mood === "repos") g.push(`<rect width="${W}" height="${H}" fill="url(#${id("warm")})"/>`);
@@ -288,7 +301,15 @@ export function renderScenery(sc, idp = "s") {
     for (let i = 0; i < 16; i++) { const t = i / 15, x = -10 + t * 820, y = t < 0.5 ? 30 + Math.sin(t * 2 * Math.PI) * 40 + 8 : 40 + Math.sin((t - 0.5) * 2 * Math.PI) * 40 * -0.3 + 8; g.push(`<circle cx="${f1(x)}" cy="${f1(y + 6)}" r="5" fill="${cols[i % 5]}"><animate attributeName="opacity" values=".7;1;.7" dur="${f1(1 + r())}s" repeatCount="indefinite"/></circle><circle cx="${f1(x)}" cy="${f1(y + 6)}" r="14" fill="${cols[i % 5]}" opacity=".15"/>`); }
     g.push(`<rect width="${W}" height="${H}" fill="url(#${id("warm")})"/>`);
   }
+  // Rayons de lumière depuis le soleil, à travers la brume
+  if (sun && !night && !wet && !INTERIOR.has(S)) for (let i = 0; i < 6; i++) {
+    const a = -0.9 + i * 0.36 + (r() - 0.5) * 0.2, w = 0.05 + r() * 0.06, len = 520;
+    g.push(`<path d="M${f1(sun.x)},${f1(sun.y)} L${f1(sun.x + Math.sin(a - w) * len)},${f1(sun.y + Math.cos(a - w) * len)} L${f1(sun.x + Math.sin(a + w) * len)},${f1(sun.y + Math.cos(a + w) * len)}Z" fill="${sky.sun}" opacity="${f1(0.05 + r() * 0.05)}" filter="url(#${id("soft")})"/>`);
+  }
   g.push(`<rect width="${W}" height="${H}" fill="url(#${id("shade")})"/>`);
+  g[0] = g[0].replace("</defs>", defs.join("") + "</defs>");
   const label = `${SETTINGS[p.setting]}, ${TIMES[p.time].toLowerCase()}${p.weather !== "clair" ? ", " + WEATHERS[p.weather].toLowerCase() : ""}`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice" role="img" aria-label="${label}">${g.join("")}</svg>`;
+  const open = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid slice"`;
+  const fxInner = FX.join(""); FX = [];
+  return { base: `${open} role="img" aria-label="${label}">${g.join("")}</svg>`, fx: `${open} aria-hidden="true">${g[0]}${fxInner}</svg>`, fxInner, label, key: JSON.stringify(p) };
 }

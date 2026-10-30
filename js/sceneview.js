@@ -1,7 +1,8 @@
 // Bandeau de scène illustré : décor animé, mini-carte de la zone, carte du monde et ambiance sonore.
 import { S, MOOD_ICON } from "./core.js";
 import { h, modal } from "./ui.js";
-import { renderScenery, sceneParams, SETTINGS, TIMES, WEATHERS } from "./scenery.js";
+import { renderSceneryLayers, sceneParams, SETTINGS, TIMES, WEATHERS } from "./scenery.js";
+import { paintScene, cloneCanvas } from "./paint.js";
 import { mapFor, renderMap } from "./atlas.js";
 import { setAmbience, cycleAmbience, ambienceLevel, AMB_ICON, AMB_LABEL, stopAll } from "./ambience.js";
 
@@ -30,6 +31,22 @@ export function sceneCard({ big = false } = {}) {
   if (sizeBtn) sizeBtn.onclick = () => { compact = !compact; el.classList.toggle("compact", compact); sizeBtn.textContent = compact ? "▾" : "▴"; try { localStorage.setItem("sceneCompact", compact ? "1" : "0"); } catch {} };
 
   let artKey = "", mapKey = "";
+  /** Le décor s'affiche tout de suite en vectoriel, puis le tableau peint le remplace en fondu ; les effets animés restent au-dessus. */
+  async function drawArt(sc) {
+    const l = renderSceneryLayers(sc, `sc${n}`);
+    const mine = artKey;
+    const base = h("div", { class: "layer", html: l.base });
+    const fx = h("div", { class: "layer fx", html: l.fx });
+    art.replaceChildren(base, fx);
+    try {
+      const painted = cloneCanvas(await paintScene(l.base, l.key));
+      if (artKey !== mine) return; // la scène a changé pendant la peinture
+      painted.className = "layer painted";
+      art.insertBefore(painted, fx);
+      requestAnimationFrame(() => painted.classList.add("on"));
+      setTimeout(() => { if (base.isConnected) base.remove(); }, 900);
+    } catch (e) { console.warn("Peinture du décor impossible, décor vectoriel conservé", e); }
+  }
   function update() {
     const c = S.campaign; if (!c) return;
     const sc = c.state?.scene || {};
@@ -38,7 +55,7 @@ export function sceneCard({ big = false } = {}) {
     sub.textContent = [MOOD_ICON[sc.mood] || "", sc.location || sc.place || "", sc.title ? `· ${SETTINGS[p.setting]}, ${TIMES[p.time].toLowerCase()}${p.weather !== "clair" ? ", " + WEATHERS[p.weather].toLowerCase() : ""}` : ""].filter(Boolean).join(" ");
     // On ne redessine que si la scène change, pour ne pas relancer les animations
     const k = JSON.stringify([sc.title, sc.location, p.setting, p.time, p.weather, p.mood]);
-    if (k !== artKey) { artKey = k; art.innerHTML = renderScenery(sc, `sc${n}`); }
+    if (k !== artKey) { artKey = k; drawArt(sc); }
     const map = campaignMap();
     const places = c.state?.places || [];
     const mk = JSON.stringify([map?.id, S.world?.id, sc.place, places.length]);
