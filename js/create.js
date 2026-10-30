@@ -40,8 +40,9 @@ export function renderCreate(ctx) {
     cantrips: [], spells: [], name: "", portrait: "🛡️", origin: "", appearance: "", backstory: "" };
   const steps = ["Espèce", "Classe", "Historique", "Caractéristiques", "Compétences", "Équipement", "Sorts", "Identité"];
   const body = h("div"); const bar = h("div", { class: "steps" }); const nav = h("div", { class: "row", style: { marginTop: "22px" } });
+  const err = h("p", { class: "panel hidden", role: "alert", style: { borderColor: "var(--blood)", color: "var(--blood)", marginTop: "16px" } });
   ctx.mount(topbar(h("button", { class: "icon-btn", "aria-label": "Retour", onclick: () => go(`#/c/${S.cid}`) }, "‹"), h("span", { class: "title" }, "Nouveau héros")),
-    h("main", { class: "wrap" }, bar, body, nav));
+    h("main", { class: "wrap" }, bar, body, err, nav));
 
   const isCaster = () => st.class && R.classes[st.class].levels["1"].spellcasting?.prepared_spells > 0;
   const visibleSteps = () => steps.map((s, i) => i).filter((i) => i !== 6 || isCaster());
@@ -73,7 +74,15 @@ export function renderCreate(ctx) {
       choiceGrid(Object.values(R.backgrounds).map((b) => [b.index, b.nameFr, `${b.skills.map((s) => R.skills[s].nameFr).join(", ")} · don ${b.feat.name}`]), "background", () => { st.bgBonus = {}; st.classSkills = []; st.equipBg = 0; }),
       b ? h("div", { class: "section" }, h("h3", {}, `Don : ${b.feat.name}${b.feat.note ? " (" + b.feat.note + ")" : ""}`), (() => { const t = R.feats[b.feat.index]?.description || ""; const p = h("div", { class: "desc" }, t); return [p, h("button", { class: "btn small ghost", onclick: () => translateInto(p, t) }, "Traduire")]; })()) : null];
   }
+  /** Bonus d'historique proposé d'office : +2 sur la meilleure caractéristique utile, +1 sur la suivante (modifiable). */
+  function autoBonus() {
+    const b = R.backgrounds[st.background]; if (!b) return;
+    const prim = R.classes[st.class]?.primary || [];
+    const order = [...b.abilities].sort((x, y) => (prim.includes(y) - prim.includes(x)) || (st.base[y] - st.base[x]));
+    st.bonusMode = "2-1"; st.bgBonus = { [order[0]]: 2, [order[1]]: 1 };
+  }
   function stepAbilities() {
+    if (!Object.keys(st.bgBonus).length) autoBonus();
     const b = R.backgrounds[st.background]; const out = [h("h2", {}, "Caractéristiques")];
     out.push(h("div", { class: "chips" }, ...[["standard", "Tableau standard"], ["pointbuy", "Achat de points"], ["roll", "Lancer 4d6"]].map(([k, l]) =>
       h("button", { class: "chip", "aria-pressed": String(st.abilityMethod === k), onclick: () => { st.abilityMethod = k; if (k === "standard") st.base = { str: 15, dex: 14, con: 13, int: 12, wis: 10, cha: 8 }; if (k === "pointbuy") st.base = Object.fromEntries(ABILITIES.map((a) => [a, 8])); if (k === "roll" && st.rolled) st.base = Object.fromEntries(ABILITIES.map((a, i) => [a, st.rolled[i]])); draw(); } }, l))));
@@ -99,7 +108,7 @@ export function renderCreate(ctx) {
     })));
     // Bonus d'historique
     out.push(h("h3", { style: { marginTop: "20px" } }, "Bonus de l'historique"), h("p", { class: "small muted" }, `Parmi ${b.abilities.map((x) => ABI_FR_LONG[x]).join(", ")} : +2 à l'une et +1 à une autre, ou +1 aux trois.`),
-      h("div", { class: "chips" }, h("button", { class: "chip", "aria-pressed": String(st.bonusMode === "2-1"), onclick: () => { st.bonusMode = "2-1"; st.bgBonus = {}; draw(); } }, "+2 / +1"),
+      h("div", { class: "chips" }, h("button", { class: "chip", "aria-pressed": String(st.bonusMode === "2-1"), onclick: () => { autoBonus(); draw(); } }, "+2 / +1"),
         h("button", { class: "chip", "aria-pressed": String(st.bonusMode === "1-1-1"), onclick: () => { st.bonusMode = "1-1-1"; st.bgBonus = Object.fromEntries(b.abilities.map((x) => [x, 1])); draw(); } }, "+1 / +1 / +1")));
     if (st.bonusMode === "2-1") {
       const two = Object.keys(st.bgBonus).find((k) => st.bgBonus[k] === 2); const one = Object.keys(st.bgBonus).find((k) => st.bgBonus[k] === 1);
@@ -192,6 +201,7 @@ export function renderCreate(ctx) {
   }
 
   function draw() {
+    err.classList.add("hidden");
     const vis = visibleSteps(); const pos = vis.indexOf(st.step);
     bar.replaceChildren(...vis.map((i, k) => h("i", { class: k <= pos ? "done" : "", title: steps[i] })));
     const view = [stepSpecies, stepClass, stepBackground, stepAbilities, stepSkills, stepEquipment, stepSpells, stepIdentity][st.step];
@@ -200,7 +210,9 @@ export function renderCreate(ctx) {
     const last = pos === vis.length - 1;
     const next = h("button", { class: "btn primary" }, last ? "Créer mon héros" : "Suivant");
     next.onclick = busy(next, async () => {
-      const v = valid(st.step); if (v !== true) return toast(v, "error");
+      const v = valid(st.step);
+      if (v !== true) { err.textContent = "⚠️ " + v; err.classList.remove("hidden"); err.scrollIntoView({ behavior: "smooth", block: "center" }); return; }
+      err.classList.add("hidden");
       if (!last) { st.step = vis[pos + 1]; draw(); window.scrollTo(0, 0); return; }
       const draft = { ...st, bgBonus: st.bgBonus };
       await fn("createCharacter", { campaignId: S.cid, draft });
