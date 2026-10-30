@@ -2,6 +2,8 @@ import { HttpsError, logger, platform, randomInt, db, RULES, MONSTERS, BIBLE_ARD
 import { derive, mod, fmtMod, ABI_FR, XP_TABLE, statusFromHp, DAMAGE_FR } from "../engine.js";
 import { applyHpChange } from "./characters.js";
 import { GM_CORE, TONE, DIFFICULTY, NARRATION, GENERIC_WORLD, SUMMARY_PROMPT } from "./prompts.js";
+import { mapFor, locate, DIRECTIONS } from "../atlas.js";
+import { SETTINGS, TIMES, WEATHERS } from "../scenery.js";
 import { loadWorld, setupText, additionsText, gmAddEntry, revealEntry, CATEGORIES, CONSOLIDATE_PROMPT } from "./worlds.js";
 
 const R = RULES;
@@ -60,8 +62,15 @@ const TOOLS = [
     input_schema: S({ character_id: { type: "string" }, reason: { type: "string" } }, ["character_id"]) },
   { name: "lookup", description: "Consulte le SRD : monstre, sort, état, équipement ou objet magique. Recherche par clé ou nom anglais.",
     input_schema: S({ kind: { type: "string", enum: ["monster", "spell", "condition", "item", "magic_item", "feature"] }, query: { type: "string" } }, ["kind", "query"]) },
-  { name: "update_scene", description: "Met à jour le bandeau de scène (lieu, ambiance) affiché aux joueurs.",
-    input_schema: S({ title: { type: "string" }, location: { type: "string" }, mood: { type: "string", enum: ["calme", "mystère", "tension", "combat", "fête", "repos", "danger"] } }, ["title"]) },
+  { name: "update_scene", description: "Met à jour la scène affichée aux joueurs : bandeau, illustration du décor, ambiance sonore et position sur la carte du monde. Appelle-le à chaque changement de lieu, de moment de la journée, de météo ou d'ambiance.",
+    input_schema: S({ title: { type: "string" }, location: { type: "string" },
+      mood: { type: "string", enum: ["calme", "mystère", "tension", "combat", "fête", "repos", "danger"] },
+      setting: { type: "string", enum: Object.keys(SETTINGS), description: "Décor de l'illustration et des sons" },
+      time: { type: "string", enum: Object.keys(TIMES) }, weather: { type: "string", enum: Object.keys(WEATHERS) },
+      map_place: { type: "string", description: "Lieu sur la carte du monde : un nom de la liste « Carte » si possible, sinon le nom d'un nouveau lieu (village, auberge, ruine…) qui sera ajouté à la carte" },
+      map_near: { type: "string", description: "Pour un nouveau lieu : lieu connu de la carte dont il est proche" },
+      map_direction: { type: "string", enum: DIRECTIONS, description: "Pour un nouveau lieu : direction depuis map_near" },
+      map_distance: { type: "string", enum: ["proche", "moyen", "loin"] } }, ["title"]) },
   { name: "update_quest", description: "Crée ou met à jour une quête dans le carnet des joueurs.",
     input_schema: S({ title: { type: "string" }, status: { type: "string", enum: ["active", "done", "failed"] }, notes: { type: "string" } }, ["title", "status"]) },
   { name: "world_add", description: "Ajoute au monde un élément NOUVEAU et durable que tu viens d'inventer (lieu, PNJ important, faction, légende, créature, objet notable, coutume, culte), ou complète un élément déjà ajouté (même nom). Il devient canon pour toute la suite et pour les futures campagnes dans ce monde. N'ajoute pas les figurants sans importance.",
@@ -112,7 +121,7 @@ function fmtLog(e) {
   return `[${t}] ${e.text || ""}`;
 }
 
-async function buildContext(cid, c, chars, secret, reason) {
+async function buildContext(cid, c, chars, secret, reason, world = null) {
   const s = { ...DEFAULT_SETTINGS, ...(c.settings || {}) };
   const st = c.state || {};
   const logSnap = await db.collection(`campaigns/${cid}/log`).where("tms", ">", st.summaryUpTo || 0).orderBy("tms", "desc").limit(45).get();
@@ -121,7 +130,10 @@ async function buildContext(cid, c, chars, secret, reason) {
   const parts = [];
   parts.push(`## Paramètres de la table\n${TONE[s.tone] || TONE.famille}\n${DIFFICULTY[s.difficulty] || DIFFICULTY.normal}\n${NARRATION[s.narration] || NARRATION.moyenne}\nProgression : ${s.xpMode === "milestone" ? "jalons (level_up_ready)" : "points d'expérience (award_xp)"}.${s.houseRules ? "\nRègles maison : " + s.houseRules : ""}${c.premise ? "\nPrémisse de campagne voulue par l'hôte : " + c.premise : ""}`);
   parts.push(`## Groupe (${chars.length} héros, niveau moyen ${partyLevel})\n${chars.map(charSummary).join("\n\n") || "Aucun héros créé pour l'instant."}`);
-  if (st.scene?.title) parts.push(`## Scène actuelle\n${st.scene.title}${st.scene.location ? " — " + st.scene.location : ""}${st.scene.mood ? " (" + st.scene.mood + ")" : ""}`);
+  if (st.scene?.title) parts.push(`## Scène actuelle\n${st.scene.title}${st.scene.location ? " — " + st.scene.location : ""}${st.scene.mood ? " (" + st.scene.mood + ")" : ""}${st.scene.setting ? ` · décor ${st.scene.setting}, ${st.scene.time || "jour"}, ${st.scene.weather || "clair"}` : ""}${st.scene.place ? ` · sur la carte : ${st.scene.place}` : ""}`);
+  const map = mapFor(world, cid);
+  const known = [...map.places.map((p) => p.name), ...(st.places || []).map((p) => p.name)];
+  parts.push(`## Carte du monde (pour update_scene.map_place)\nLieux connus : ${[...new Set(known)].join(", ") || "aucun pour l'instant : chaque nouveau lieu visité s'ajoute à la carte"}.${(st.places || []).length ? `\nParcours des héros : ${st.places.map((p) => p.name).join(" → ")}.` : ""}`);
   if ((st.quests || []).length) parts.push(`## Quêtes\n${st.quests.map((q) => `- [${q.status}] ${q.title}${q.notes ? " : " + q.notes : ""}`).join("\n")}`);
   if ((secret.memory || []).length) parts.push(`## Mémoire du MJ (faits établis)\n${secret.memory.slice(-60).map((m) => "- " + m).join("\n")}`);
   if (st.summary) parts.push(`## Résumé de la campagne jusqu'ici\n${st.summary}`);
@@ -388,8 +400,26 @@ async function execTool(ctx, name, input) {
       return `${hit[0]} : ${JSON.stringify(hit[1]).slice(0, 3500)}`;
     }
     case "update_scene": {
-      await db.doc(`campaigns/${cid}`).update({ "state.scene": { title: str(input.title, 80), location: str(input.location, 80), mood: str(input.mood, 20), at: Date.now() } });
-      return "Scène mise à jour.";
+      const st = ctx.c.state || {};
+      const scene = { title: str(input.title, 80), location: str(input.location, 80), mood: str(input.mood, 20), at: Date.now() };
+      for (const [k, list] of [["setting", SETTINGS], ["time", TIMES], ["weather", WEATHERS]]) if (list[input[k]]) scene[k] = input[k];
+      const upd = { "state.scene": scene };
+      let note = "";
+      const places = [...(st.places || [])];
+      const prev = places.at(-1) || null;
+      const want = input.map_place || (input.map_near ? "" : st.scene?.place);
+      if (want) {
+        const map = mapFor(ctx.world, cid);
+        const { place, added } = locate(map, places, { place: want, near: input.map_near, direction: input.map_direction, distance: input.map_distance }, prev);
+        if (place) {
+          scene.place = place.name;
+          if (!prev || prev.name !== place.name) { places.push({ ...place, at: Date.now() }); upd["state.places"] = places.slice(-40); }
+          if (added) note = ` Nouveau lieu « ${place.name} » ajouté à la carte.`;
+        }
+      }
+      ctx.c.state = { ...st, scene, places: upd["state.places"] || st.places };
+      await db.doc(`campaigns/${cid}`).update(upd);
+      return "Scène mise à jour." + note;
     }
     case "update_quest": {
       const quests = [...(ctx.c.state?.quests || [])];
@@ -443,7 +473,7 @@ export async function runGm(cid, reason = "players", depth = 0) {
     const secret = (await db.doc(`campaigns/${cid}/secret/gm`).get()).data() || {};
     const worldDoc = await loadWorld(c.worldId);
     const ctx = { cid, c, chars, secret, settings, world: worldDoc, combat: c.state?.combat || { active: false }, pendingPublic: [] };
-    const userText = await buildContext(cid, c, chars, secret, reason);
+    const userText = await buildContext(cid, c, chars, secret, reason, worldDoc);
     const system = [{ type: "text", text: GM_CORE }];
     if (worldDoc) {
       system.push({ type: "text", text: `${setupText(worldDoc.setup)}\n\n# BIBLE DU MONDE « ${worldDoc.name} » — version ${worldDoc.version}\n${worldDoc.baseText}`, cache_control: { type: "ephemeral" } });

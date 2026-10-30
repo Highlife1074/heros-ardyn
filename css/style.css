@@ -91,10 +91,6 @@ textarea { min-height: 90px; resize: vertical; }
 /* ------- Écran de jeu */
 .game { display: grid; grid-template-columns: minmax(0, 1fr); height: calc(100dvh - 57px); }
 .game-main { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
-.scene { padding: 10px 16px; border-bottom: 1px solid var(--line); display: flex; gap: 10px; align-items: baseline; min-width: 0; }
-.scene .mood { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.scene .name { font-family: var(--serif); font-size: 1.1rem; font-weight: 700; }
-.scene .mood { font-size: .85rem; color: var(--vellum-dim); }
 .log { flex: 1; overflow-y: auto; padding: 14px 16px 24px; scroll-behavior: smooth; }
 .entry { max-width: 68ch; margin: 0 auto 14px; }
 .entry.gm { font-family: var(--serif); font-size: 1.12rem; line-height: 1.62; }
@@ -235,7 +231,7 @@ textarea { min-height: 90px; resize: vertical; }
 
 /* ------- Écran de table (TV / tablette posée au centre) */
 body.screen-mode { font-size: 22px; }
-.screen { display: grid; grid-template-rows: auto 1fr auto; height: 100dvh; }
+.screen { display: grid; grid-template-rows: auto auto 1fr auto; height: 100dvh; }
 .screen .narration { overflow-y: auto; padding: 3vh 6vw; }
 .screen .narration .entry { max-width: 52ch; }
 .screen .narration .entry.gm { font-size: 1.5rem; }
@@ -248,3 +244,35 @@ body.screen-mode { font-size: 22px; }
 .icon-btn.mic.listening { color: var(--blood); background: color-mix(in srgb, var(--blood) 18%, transparent); animation: pulse 1.2s ease-in-out infinite; }
 @keyframes pulse { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--blood) 25%, transparent); } }
 .composer .inner .icon-btn { flex: none; }
+
+/* ------- Scène illustrée, carte et ambiance */
+.scene-card { position: relative; flex: none; height: 150px; overflow: hidden; border-bottom: 1px solid var(--line); background: #10141c; transition: height .3s ease; }
+.scene-card.compact { height: 58px; }
+.scene-card.big { height: 32vh; min-height: 180px; }
+.scene-card .art, .scene-card .art svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.scene-card .cap { position: absolute; left: 14px; bottom: 9px; right: 150px; color: #f3ead6; text-shadow: 0 1px 3px rgba(0, 0, 0, .85); min-width: 0; }
+.scene-card .cap .name { font-family: var(--serif); font-weight: 800; font-size: 1.3rem; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.scene-card .cap .sub { font-size: .85rem; opacity: .9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.scene-card.compact .cap { bottom: 6px; right: 120px; }
+.scene-card.compact .cap .name { font-size: 1.05rem; }
+.scene-card.compact .cap .sub, .scene-card.compact .minimap { display: none; }
+.scene-card .minimap { position: absolute; right: 10px; bottom: 10px; width: 126px; height: 88px; padding: 0; border: 2px solid #c79342; border-radius: 6px; overflow: hidden; cursor: pointer; background: #d7c08f; box-shadow: 0 2px 10px rgba(0, 0, 0, .5); }
+.scene-card .minimap svg { width: 100%; height: 100%; display: block; }
+.scene-tools { position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; }
+.scene-tool { width: 36px; height: 36px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .25); background: rgba(10, 14, 22, .55); color: #f3ead6; cursor: pointer; font-size: 1rem; backdrop-filter: blur(3px); }
+.scene-tool:hover { background: rgba(10, 14, 22, .8); }
+.scene-card.compact .scene-tools { top: 11px; }
+.scene-card.big .cap { left: 6vw; right: 300px; bottom: 16px; }
+.scene-card.big .cap .name { font-size: 2rem; }
+.scene-card.big .cap .sub { font-size: 1rem; }
+.scene-card.big .minimap { width: 260px; height: 182px; right: 2vw; bottom: 14px; }
+@media (max-width: 520px) {
+  .scene-card { height: 124px; }
+  .scene-card .minimap { width: 96px; height: 67px; }
+  .scene-card .cap { right: 112px; }
+  .scene-card.big .minimap { width: 150px; height: 105px; }
+  .scene-card.big .cap { right: 170px; }
+}
+.modal.wide { width: min(980px, 100%); }
+.map-view { aspect-ratio: 10 / 7; border-radius: var(--radius-s); overflow: hidden; border: 2px solid var(--bronze-deep); background: #d7c08f; }
+.map-view svg { width: 100%; height: 100%; display: block; }

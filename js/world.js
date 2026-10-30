@@ -2,6 +2,7 @@
 import { S, fn, go, isWorldOwner, fs } from "./core.js";
 import { collection, getDocs } from "../vendor/firebase/firebase-firestore.js";
 import { h, toast, busy, errMsg, modal, confirmBox, topbar, timeAgo } from "./ui.js";
+import { openMap } from "./sceneview.js";
 
 export const CATEGORIES = { lieu: "Lieu", pnj: "Personnage", faction: "Faction", histoire: "Histoire et légendes", creature: "Créature", objet: "Objet notable", culture: "Culture et coutumes", religion: "Religion et magie" };
 const CAT_ICON = { lieu: "🏰", pnj: "👤", faction: "⚜️", histoire: "📜", creature: "🐺", objet: "🗝️", culture: "🍷", religion: "🕯️" };
@@ -17,7 +18,7 @@ const MAGIC = [
 export function renderWorld(ctx) {
   const box = h("main", { class: "wrap stack" });
   let tab = "entries"; let filter = "new";
-  ctx.mount(topbar(h("button", { class: "icon-btn", "aria-label": "Retour", onclick: () => go(`#/c/${S.cid}`) }, "‹"), h("span", { class: "title" }, "Le monde")), box);
+  ctx.mount(topbar(h("button", { class: "icon-btn", "aria-label": "Retour", onclick: () => go(`#/c/${S.cid}`) }, "‹"), h("span", { class: "title grow" }, "Le monde"), h("button", { class: "btn small", onclick: () => openMap() }, "🧭 Carte")), box);
 
   const draw = () => {
     const w = S.world;

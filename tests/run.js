@@ -75,7 +75,7 @@ await t("création d'un magicien elfe (4d6 tirés par le serveur)", async () => 
 });
 
 await t("le MJ ouvre l'aventure et lance un combat", async () => {
-  script.push(resp([{ type: "text", text: "La brume tombe sur Moncalm." }, tool("update_scene", { title: "La route de Moncalm", mood: "tension" }),
+  script.push(resp([{ type: "text", text: "La brume tombe sur Moncalm." }, tool("update_scene", { title: "La route de Moncalm", mood: "tension", setting: "route", time: "crepuscule", weather: "brume", map_place: "Moncalm" }),
     tool("start_combat", { enemies: [{ monster_key: "goblin-warrior", name: "Gobelin", count: 2 }] })]));
   script.push(resp([{ type: "text", text: "Deux silhouettes surgissent ! Lancez l'initiative." }], "end_turn"));
   await gm.runGm(cid, "players");
@@ -83,10 +83,27 @@ await t("le MJ ouvre l'aventure et lance un combat", async () => {
   assert.equal(c.state.combat.active, true); assert.equal(c.state.combat.order.length, 4);
   assert.equal(c.state.pendingRolls.length, 2); assert.ok(!("dc" in c.state.pendingRolls[0]));
   assert.equal(c.state.gmBusy, false);
+  assert.equal(c.state.scene.place, "Moncalm"); assert.equal(c.state.scene.setting, "route"); assert.equal(c.state.places.length, 1);
   const sys = calls[0].system.map((b) => b.text).join(""); assert.match(sys, /Ardyn/);
   assert.match(calls[0].messages[0].content, /Thrain/);
   const logs = (await F.db.collection(`campaigns/${cid}/log`).where("tms", ">", 0).get()).docs.map((d) => d.data());
   assert.ok(logs.some((l) => l.type === "gm" && /brume/.test(l.text)));
+});
+
+await t("carte : nouveau lieu situé près d'un lieu connu, parcours, illustration", async () => {
+  script.push(resp([tool("update_scene", { title: "L'auberge du Sanglier", setting: "taverne", time: "nuit", mood: "repos", map_place: "Auberge du Sanglier", map_near: "Moncalm", map_direction: "ouest", map_distance: "proche" })]));
+  script.push(resp([{ type: "text", text: "Une auberge enfumée." }], "end_turn"));
+  await gm.runGm(cid, "players");
+  const c = F.raw(`campaigns/${cid}`);
+  assert.equal(c.state.scene.place, "Auberge du Sanglier");
+  assert.deepEqual(c.state.places.map((p) => p.name), ["Moncalm", "Auberge du Sanglier"]);
+  const [a, b] = c.state.places; assert.ok(b.x < a.x && a.x - b.x < 40, "à l'ouest et proche");
+  assert.match(calls.at(-2).messages[0].content, /Lieux connus : .*Handorf/);
+  const A = await import("../js/atlas.js"); const Sc = await import("../js/scenery.js");
+  assert.match(A.renderMap(A.mapFor(null), { places: c.state.places, current: "Auberge du Sanglier", zoom: true }), /Auberge du Sanglier/);
+  assert.match(Sc.renderScenery(c.state.scene), /^<svg/); assert.equal(Sc.guessSetting("La crypte oubliée"), "souterrain");
+  const g = A.mapFor({ id: "w1", base: "custom" }); assert.equal(g.places.length, 0);
+  assert.ok(A.locate(g, [], { place: "Port-Sel" }).added);
 });
 
 await t("anti-triche : jets d'initiative sur demande, mauvais perso refusé", async () => {

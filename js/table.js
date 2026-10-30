@@ -1,10 +1,11 @@
-import { S, fn, go, myChar, isHost, activeChars, postMessage, KIND_FR, MOOD_ICON, PLATFORM } from "./core.js";
+import { S, fn, go, myChar, isHost, activeChars, postMessage, KIND_FR, PLATFORM } from "./core.js";
 import { h, md, toast, busy, errMsg, modal, topbar, toggleTheme } from "./ui.js";
 import { doRoll } from "./actions.js";
 import { renderSheet } from "./sheet.js";
 import { derive, statusFromHp, fmtMod } from "./engine.js";
 import { codexList } from "./world.js";
 import { micButton } from "./voice.js";
+import { sceneCard } from "./sceneview.js";
 
 const R = () => S.rules;
 let speakOn = false;
@@ -44,7 +45,8 @@ export function renderEntry(e) {
 export function renderTable(ctx) {
   let tab = "story";
   const logEl = h("div", { class: "log", role: "log", "aria-live": "polite" });
-  const sceneEl = h("div", { class: "scene" });
+  const card = sceneCard(); const sceneEl = card.el;
+  ctx.addCleanup(card.stop);
   const initEl = h("div", { class: "initiative hidden" });
   const reqEl = h("div", { class: "requests" });
   const sideBody = h("div", { class: "side-body" });
@@ -99,10 +101,10 @@ export function renderTable(ctx) {
   }
 
   function renderScene() {
-    const c = S.campaign; const sc = c.state?.scene || {};
+    const c = S.campaign;
     titleEl.textContent = c.name;
     hostBtn.classList.toggle("hidden", !isHost());
-    sceneEl.replaceChildren(h("span", {}, MOOD_ICON[sc.mood] || "🗺️"), h("span", { class: "name" }, sc.title || "Avant l'aventure"), sc.location ? h("span", { class: "mood" }, sc.location) : null);
+    card.update();
     keyWarn.classList.toggle("hidden", !!PLATFORM.apiKey);
     keyWarn.replaceChildren(h("div", { class: "what" }, isHost() ? "Le MJ n'a pas encore de clé Claude." : "Le MJ attend que l'hôte saisisse la clé Claude."),
       isHost() ? h("button", { class: "btn small primary", onclick: () => go(`#/c/${S.cid}/host`) }, "Saisir la clé") : null);

@@ -1,14 +1,16 @@
 // Écran de table : une tablette ou une TV posée au milieu. Gros texte, lecture à voix haute, dés de tout le monde.
-import { S, go, activeChars, MOOD_ICON } from "./core.js";
+import { S, go, activeChars } from "./core.js";
 import { h } from "./ui.js";
 import { renderEntry, speak, setSpeak, speakEnabled } from "./table.js";
 import { animateRoll } from "./dice3d.js";
 import { derive } from "./engine.js";
+import { sceneCard } from "./sceneview.js";
 
 export function renderScreen(ctx) {
   document.body.classList.add("screen-mode");
   ctx.addCleanup(() => document.body.classList.remove("screen-mode"));
-  const title = h("h1"); const mood = h("span", { class: "muted" });
+  const title = h("h1"); const card = sceneCard({ big: true });
+  ctx.addCleanup(card.stop);
   const narr = h("div", { class: "narration", role: "log", "aria-live": "polite" });
   const strip = h("div", { class: "party-strip" });
   const combat = h("div", { class: "initiative hidden", style: { padding: "10px 6vw" } });
@@ -19,14 +21,13 @@ export function renderScreen(ctx) {
   wake.onclick = async () => { try { lock = await navigator.wakeLock?.request("screen"); wake.textContent = "☀️ Activé"; } catch { wake.textContent = "Non disponible"; } };
   ctx.addCleanup(() => lock?.release?.());
   ctx.mount(h("div", { class: "screen" },
-    h("div", { class: "screen-title" }, h("div", {}, title, mood), h("div", { class: "row" }, voice, wake, h("button", { class: "btn small", onclick: () => document.documentElement.requestFullscreen?.() }, "Plein écran"),
-      h("button", { class: "btn small", onclick: () => go(`#/c/${S.cid}`) }, "Quitter"))),
+    h("div", { class: "screen-title" }, title, h("div", { class: "row" }, voice, wake, h("button", { class: "btn small", onclick: () => document.documentElement.requestFullscreen?.() }, "Plein écran"),
+      h("button", { class: "btn small", onclick: () => go(`#/c/${S.cid}`) }, "Quitter"))), card.el,
     h("div", { style: { display: "flex", flexDirection: "column", minHeight: 0 } }, combat, narr), strip));
 
   const draw = (fresh = []) => {
     const c = S.campaign; if (!c) return;
-    const sc = c.state?.scene || {};
-    title.textContent = sc.title || c.name; mood.textContent = `${MOOD_ICON[sc.mood] || ""} ${sc.location || ""}`;
+    title.textContent = c.name; card.update();
     const shown = S.log.filter((e) => e.type !== "ooc").slice(-30);
     narr.replaceChildren(...shown.map(renderEntry), c.state?.gmBusy && Date.now() - (c.state.gmBusySince || 0) < 120e3 ? h("div", { class: "gm-thinking" }, "Le Maître du Jeu réfléchit") : null);
     narr.scrollTop = narr.scrollHeight;

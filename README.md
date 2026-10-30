@@ -8,12 +8,16 @@ Même format que mes autres apps : **GitHub Pages** pour le site, **Firebase** (
 - Maître du Jeu Claude : narration en français, jets demandés avec DD secret, combats, XP, trésors, repos, quêtes, mémoire de campagne.
 - Monde vivant (🗺️) : cadre fixé par l'hôte (Lancedragon / Seigneur des Anneaux / Game of Thrones, magie rare, interdits, classes et peuples jouables), ajouts du MJ à relire, Bible vN téléchargeable, codex des joueurs.
 - Dés 3D ; chaque jet est enregistré immédiatement dans Firestore et visible de toute la table (impossible de relancer en douce).
-- Écran de table (📺) avec voix du MJ.
+- Scène illustrée : décor animé (21 décors, heure, météo, ambiance) choisi par le MJ, mini-carte de la zone et carte du monde (🧭) avec « vous êtes ici » et le parcours des héros. Carte d'Ardyn dessinée d'après la bible (`js/atlas.js`, coordonnées modifiables) ; continent généré pour les autres mondes.
+- Ambiance sonore synthétisée en direct (vent, pluie, orage, feu, oiseaux, taverne, tambours de combat…), bouton 🔇/🎵/🎶 sur la scène ; elle baisse quand la voix du MJ parle.
+- Écran de table (📺) avec voix du MJ, grande illustration et ambiance.
 
 ## Fichiers
 ```
 index.html, css/, js/          l'app (aucune compilation)
 js/firebase-config.js          ← la configuration Firebase à coller
+js/atlas.js, js/scenery.js     carte du monde, illustrations de scène
+js/ambience.js                 ambiance sonore (Web Audio)
 js/server/                     logique de jeu (règles, dés, MJ, monde), exécutée dans le navigateur
 data/                          règles SRD 5.2, bestiaire, bible d'Ardyn
 firestore.rules                règles de sécurité à coller dans la console Firebase
