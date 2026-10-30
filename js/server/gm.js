@@ -61,8 +61,10 @@ const TOOLS = [
     input_schema: S({ character_id: { type: "string" }, reason: { type: "string" } }, ["character_id"]) },
   { name: "lookup", description: "Consulte le SRD : monstre, sort, état, équipement ou objet magique. Recherche par clé ou nom anglais.",
     input_schema: S({ kind: { type: "string", enum: ["monster", "spell", "condition", "item", "magic_item", "feature"] }, query: { type: "string" } }, ["kind", "query"]) },
-  { name: "update_scene", description: "Met à jour le bandeau de scène (lieu, ambiance) affiché aux joueurs.",
-    input_schema: S({ title: { type: "string" }, location: { type: "string" }, mood: { type: "string", enum: ["calme", "mystère", "tension", "combat", "fête", "repos", "danger"] } }, ["title"]) },
+  { name: "update_scene", description: "Nouvelle scène (changement de lieu, de moment ou d'atmosphère) : met à jour le bandeau, l'ambiance sonore jouée chez les joueurs et, si activée, une illustration de la scène.",
+    input_schema: S({ title: { type: "string" }, location: { type: "string" }, mood: { type: "string", enum: ["calme", "mystère", "tension", "combat", "fête", "repos", "danger"] },
+      ambiance: { type: "string", enum: ["foret", "pluie", "vent", "taverne", "ville", "feu", "grotte", "donjon", "mer", "nuit", "combat", "tension", "mystere", "calme", "silence"], description: "Fond sonore joué en boucle chez les joueurs" },
+      illustration: { type: "string", description: "Description visuelle EN ANGLAIS de la scène pour l'illustration (lieu, lumière, personnages vus de loin, ambiance), 1 à 3 phrases, sans texte ni nom propre inconnu" } }, ["title", "ambiance"]) },
   { name: "update_quest", description: "Crée ou met à jour une quête dans le carnet des joueurs.",
     input_schema: S({ title: { type: "string" }, status: { type: "string", enum: ["active", "done", "failed"] }, notes: { type: "string" } }, ["title", "status"]) },
   { name: "world_add", description: "Ajoute au monde un élément NOUVEAU et durable que tu viens d'inventer (lieu, PNJ important, faction, légende, créature, objet notable, coutume, culte), ou complète un élément déjà ajouté (même nom). Il devient canon pour toute la suite et pour les futures campagnes dans ce monde. N'ajoute pas les figurants sans importance.",
@@ -390,8 +392,17 @@ async function execTool(ctx, name, input) {
       return `${hit[0]} : ${JSON.stringify(hit[1]).slice(0, 3500)}`;
     }
     case "update_scene": {
-      await db.doc(`campaigns/${cid}`).update({ "state.scene": { title: str(input.title, 80), location: str(input.location, 80), mood: str(input.mood, 20), at: Date.now() } });
-      return "Scène mise à jour.";
+      const prev = ctx.c.state?.scene || {};
+      const scene = { title: str(input.title, 80), location: str(input.location, 80), mood: str(input.mood, 20), ambiance: str(input.ambiance, 20), at: Date.now() };
+      await db.doc(`campaigns/${cid}`).update({ "state.scene": scene });
+      ctx.c.state = { ...(ctx.c.state || {}), scene };
+      // Illustration : une par nouvelle scène, générée en arrière-plan (n'attend pas)
+      const newPlace = scene.title !== prev.title || scene.location !== prev.location;
+      if (ctx.settings.images !== false && newPlace && !ctx.illustrated && platform.illustrate) {
+        ctx.illustrated = true;
+        platform.illustrate(cid, { scene, prompt: str(input.illustration, 600), model: ctx.settings.imageModel, worldSetup: ctx.world?.setup, tone: ctx.settings.tone });
+      }
+      return "Scène mise à jour (ambiance sonore en place).";
     }
     case "update_quest": {
       const quests = [...(ctx.c.state?.quests || [])];

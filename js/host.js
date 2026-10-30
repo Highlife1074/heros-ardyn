@@ -29,6 +29,8 @@ export function renderHost(ctx) {
       model: sel("model", MODELS),
       xpMode: sel("xpMode", [["xp", "Points d'expérience"], ["milestone", "Jalons (le MJ décide)"]]),
       hpMethod: sel("hpMethod", [["average", "Valeur moyenne (recommandé)"], ["roll", "Lancer le dé de vie"]]),
+      images: sel("images", [["true", "Oui : une illustration à chaque nouvelle scène"], ["false", "Non"]]),
+      imageModel: h("input", { type: "text", value: s.imageModel || "gemini-nano-banana-2.1", maxlength: 60 }),
       turnMode: sel("turnMode", [["round", "Tour de table : chacun son tour, puis le MJ répond à tous"], ["free", "Libre : chacun écrit quand il veut"]]),
       autoGmAfterRolls: sel("autoGmAfterRolls", [["true", "Oui, dès que tous les jets demandés sont faits"], ["false", "Non, attendre qu'on appuie sur « Au MJ »"]]),
       houseRules: h("textarea", { rows: 3, maxlength: 2000, placeholder: "Ex. Les potions se boivent en action bonus. Pas de mort définitive avant le niveau 3." }, s.houseRules || ""),
@@ -37,7 +39,7 @@ export function renderHost(ctx) {
     save.onclick = busy(save, async () => {
       await fn("updateCampaign", { campaignId: S.cid, name: f.name.value, premise: f.premise.value,
         settings: { tone: f.tone.value, difficulty: f.difficulty.value, narration: f.narration.value, model: f.model.value, xpMode: f.xpMode.value,
-          hpMethod: f.hpMethod.value, turnMode: f.turnMode.value, autoGmAfterRolls: f.autoGmAfterRolls.value === "true", houseRules: f.houseRules.value } });
+          hpMethod: f.hpMethod.value, turnMode: f.turnMode.value, images: f.images.value === "true", imageModel: f.imageModel.value.trim(), autoGmAfterRolls: f.autoGmAfterRolls.value === "true", houseRules: f.houseRules.value } });
       toast("Réglages enregistrés.");
     });
     const keyInput = h("input", { type: "password", autocomplete: "off", placeholder: "sk-ant-…", value: PLATFORM.apiKey || "" });
@@ -63,6 +65,9 @@ export function renderHost(ctx) {
         h("button", { class: "btn", onclick: () => go(`#/c/${S.cid}/world`) }, "🗺️ Ouvrir le monde")),
       h("section", { class: "panel" }, h("h3", {}, "Le Maître du Jeu"), h("label", {}, "Public"), f.tone, h("label", {}, "Difficulté"), f.difficulty,
         h("label", {}, "Longueur des récits"), f.narration, h("label", {}, "Modèle d'IA"), f.model,
+        h("label", {}, "Illustrations des scènes (Gemini)"), f.images,
+        h("p", { class: "small muted" }, "Générées par Gemini dans ton projet Firebase : active « AI Logic » dans la console Firebase (Gemini Developer API). Les modèles d'image demandent le forfait Blaze."),
+        h("label", {}, "Modèle d'image"), f.imageModel,
         h("label", {}, "Déroulement de la partie"), f.turnMode,
         h("p", { class: "small muted" }, "En tour de table, seul le joueur dont c'est le tour peut écrire ; quand tout le monde a joué (ou passé), le MJ répond à tous d'un coup. En combat, c'est l'ordre d'initiative qui décide. Le hors-jeu reste toujours ouvert."),
         h("label", {}, "Relancer le MJ automatiquement"), f.autoGmAfterRolls, h("label", {}, "Règles maison"), f.houseRules),

@@ -257,3 +257,10 @@ body.screen-mode { font-size: 22px; }
 .turn-chip.now { border-color: var(--bronze); color: var(--bronze); font-weight: 700; }
 .turn-chip.done { color: var(--verdigris); border-color: color-mix(in srgb, var(--verdigris) 50%, var(--line)); }
 .composer textarea:disabled { opacity: .55; }
+
+/* Illustrations */
+.entry.scene-img { margin: 6px auto 18px; padding: 0; }
+.entry.scene-img img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius-m); border: 1px solid var(--line); display: block; cursor: zoom-in; background: var(--slate); }
+.entry.scene-img figcaption { font-size: .8rem; color: var(--vellum-dim); text-align: center; margin-top: 4px; font-style: italic; }
+.screen .entry.scene-img { max-width: 900px; }
+input[type=range] { width: 100%; accent-color: var(--bronze); }

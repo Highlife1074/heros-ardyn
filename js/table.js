@@ -6,13 +6,26 @@ import { derive, statusFromHp, fmtMod } from "./engine.js";
 import { codexList } from "./world.js";
 import { micButton } from "./voice.js";
 import { whoseTurn } from "./turnlogic.js";
+import { setAmbiance, guessAmbiance, setAmbienceEnabled, ambienceEnabled, setAmbienceVolume, AMBIANCES, wakeAmbience } from "./ambience.js";
+import { doc, getDoc } from "../vendor/firebase/firebase-firestore.js";
+import { fs } from "./core.js";
 
 const R = () => S.rules;
 export { speak, setSpeak, speakEnabled } from "./speech.js";
 import { speak, setSpeak, speakEnabled, unlockSpeech, speechSupported } from "./speech.js";
 
 // ---------------------------------------------------------------- Journal
+const imgCache = new Map();
+function sceneImage(e) {
+  const img = h("img", { alt: e.text ? `Illustration : ${e.text}` : "Illustration de la scène", loading: "lazy" });
+  const fig = h("figure", { class: "entry scene-img" }, img, e.text ? h("figcaption", {}, e.text) : null);
+  const put = (url) => { img.src = url; img.onclick = () => window.open(url, "_blank"); };
+  if (imgCache.has(e.imageId)) put(imgCache.get(e.imageId));
+  else getDoc(doc(fs, "campaigns", S.cid, "images", e.imageId)).then((d) => { if (d.exists()) { imgCache.set(e.imageId, d.data().data); put(d.data().data); } }).catch(() => fig.remove());
+  return fig;
+}
 export function renderEntry(e) {
+  if (e.type === "image") return sceneImage(e);
   if (e.type === "gm") return h("article", { class: "entry gm" }, h("div", { html: md(e.text) }));
   if (e.type === "player") return h("div", { class: "entry player" }, h("div", { class: "who" }, e.portrait || "", h("b", {}, e.authorName), e.playerName && e.playerName !== e.authorName ? `(${e.playerName})` : ""), h("div", { class: "text" }, e.text));
   if (e.type === "ooc") return h("div", { class: "entry ooc" }, `💬 ${e.playerName || e.authorName} : ${e.text}`);
@@ -99,10 +112,12 @@ export function renderTable(ctx) {
     toast(speakEnabled() ? "Voix du MJ activée sur cet appareil." : "Voix du MJ coupée.");
   };
 
+  const ambBtn = h("button", { class: "icon-btn", title: "Ambiance sonore", "aria-label": "Ambiance sonore", "aria-pressed": String(ambienceEnabled()) }, ambienceEnabled() ? "🎵" : "🔇");
+  ambBtn.onclick = () => ambienceMenu(ambBtn);
   const main = h("div", { class: "game-main" }, sceneEl, initEl, logEl, mainPanel, reqEl, keyWarn, errBox, thinking, turnBar, composer, bottom);
   ctx.mount(
     topbar(h("button", { class: "icon-btn", "aria-label": "Retour aux campagnes", onclick: () => go("#/") }, "‹"), titleEl,
-      ttsBtn, h("button", { class: "icon-btn", title: "Le monde : codex, cadre et bible", "aria-label": "Le monde", onclick: () => go(`#/c/${S.cid}/world`) }, "🗺️"),
+      ttsBtn, ambBtn, h("button", { class: "icon-btn", title: "Le monde : codex, cadre et bible", "aria-label": "Le monde", onclick: () => go(`#/c/${S.cid}/world`) }, "🗺️"),
       h("button", { class: "icon-btn", title: "Écran de table (tablette ou TV au centre)", "aria-label": "Écran de table", onclick: () => go(`#/c/${S.cid}/screen`) }, "📺"),
       hostBtn, h("button", { class: "icon-btn", "aria-label": "Thème", onclick: toggleTheme }, "🌓")),
     h("div", { class: "game" }, main, h("aside", { class: "side" }, sideTabs, sideBody)));
@@ -115,9 +130,12 @@ export function renderTable(ctx) {
   function renderScene() {
     const c = S.campaign; const sc = c.state?.scene || {};
     titleEl.textContent = c.name;
+    setAmbiance(guessAmbiance(sc));
     hostBtn.classList.toggle("hidden", !isHost());
     sceneEl.replaceChildren(h("span", {}, MOOD_ICON[sc.mood] || "🗺️"), h("span", { class: "name" }, sc.title || "Avant l'aventure"), sc.location ? h("span", { class: "mood" }, sc.location) : null);
-    errBox.classList.toggle("hidden", !S.lastError);
+    const imgWarn = isHost() && c.state?.imageWarning;
+    errBox.classList.toggle("hidden", !S.lastError && !imgWarn);
+    if (!S.lastError && imgWarn) errBox.replaceChildren(h("div", { class: "what small" }, "🖼️ " + imgWarn));
     if (S.lastError) errBox.replaceChildren(h("div", { class: "what small" }, "⚠️ " + S.lastError + (/permission|insufficient/i.test(S.lastError) ? " — vérifie que les règles Firestore sont publiées." : "")));
     keyWarn.classList.toggle("hidden", !!PLATFORM.apiKey);
     keyWarn.replaceChildren(h("div", { class: "what" }, isHost() ? "Le MJ n'a pas encore de clé Claude." : "Le MJ attend que l'hôte saisisse la clé Claude."),
@@ -241,6 +259,8 @@ export function renderTable(ctx) {
     prevReq = now;
   });
   ctx.addCleanup(off); ctx.addCleanup(() => clearTimeout(thinkTimer));
+  const onVis = () => { if (!document.hidden) wakeAmbience(); };
+  document.addEventListener("visibilitychange", onVis); ctx.addCleanup(() => document.removeEventListener("visibilitychange", onVis));
   const onResize = () => S.campaign && renderAll();
   window.addEventListener("resize", onResize); ctx.addCleanup(() => window.removeEventListener("resize", onResize));
   if (S.campaign) { renderAll(); renderLog(); }
@@ -303,3 +323,18 @@ async function freeDice() {
 }
 
 export { statusFromHp };
+
+
+/** Menu de l'ambiance : marche/arrêt et volume (réglage propre à chaque appareil). */
+export async function ambienceMenu(btn) {
+  const vol = h("input", { type: "range", min: 0, max: 100, value: Math.round((parseFloat(localStorage.getItem("ambienceVol") || "0.6")) * 100), "aria-label": "Volume de l'ambiance" });
+  vol.oninput = () => setAmbienceVolume(vol.value / 100);
+  const sc = S.campaign?.state?.scene || {};
+  const r = await modal("Ambiance sonore", h("div", {},
+    h("p", {}, "Le fond sonore suit automatiquement les scènes du MJ (forêt, taverne, grotte, combat…)."),
+    h("p", { class: "small muted" }, `Scène actuelle : ${AMBIANCES[guessAmbiance(sc)] || "calme"}.`),
+    h("label", {}, "Volume"), vol), [{ label: ambienceEnabled() ? "Couper" : "Fermer", value: ambienceEnabled() ? "off" : null }, ...(ambienceEnabled() ? [{ label: "OK", class: "btn primary", value: "ok" }] : [{ label: "Activer", class: "btn primary", value: "on" }])]);
+  if (r === "on") { setAmbienceEnabled(true); setAmbiance(guessAmbiance(sc)); }
+  if (r === "off") setAmbienceEnabled(false);
+  if (btn) { btn.textContent = ambienceEnabled() ? "🎵" : "🔇"; btn.setAttribute("aria-pressed", String(ambienceEnabled())); }
+}

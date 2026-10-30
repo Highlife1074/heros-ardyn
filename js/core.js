@@ -16,7 +16,7 @@ export const fbApp = initializeApp(firebaseConfig);
 export const auth = getAuth(fbApp);
 // ignoreUndefinedProperties : un champ vide ne fait plus échouer une écriture.
 export const fs = initializeFirestore(fbApp, { ignoreUndefinedProperties: true });
-export const APP_VERSION = "2026-10-30 i";
+export const APP_VERSION = "2026-10-30 j";
 
 // ---------------------------------------------------------------- Plateforme pour la logique de jeu (js/server)
 // Même interface que l'ancienne version serveur : la logique n'a pas eu besoin d'être réécrite.
@@ -98,6 +98,7 @@ export const PLATFORM = {
   RULES: null, MONSTERS: null, BIBLE: null, apiKey: "",
   anthropic: { messages: { create: (b) => claude(b), stream: (b) => ({ finalMessage: () => claude(b, true) }) } },
   hash: sha1,
+  illustrate: (cid, opts) => { import("./illustrate.js").then((m) => m.illustrate({ fbApp, fs, cid, ...opts })).catch((e) => console.warn(e)); },
   requestGm: (cid, reason) => server.gm.runGm(cid, reason).catch((e) => console.error(e)),
 };
 const server = {};

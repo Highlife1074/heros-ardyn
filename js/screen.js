@@ -1,7 +1,8 @@
 // Écran de table : une tablette ou une TV posée au milieu. Gros texte, lecture à voix haute, dés de tout le monde.
 import { S, go, activeChars, MOOD_ICON } from "./core.js";
 import { h } from "./ui.js";
-import { renderEntry } from "./table.js";
+import { renderEntry, ambienceMenu } from "./table.js";
+import { setAmbiance, guessAmbiance, ambienceEnabled } from "./ambience.js";
 import { speak, setSpeak, speakEnabled } from "./speech.js";
 import { animateRoll } from "./dice3d.js";
 import { derive } from "./engine.js";
@@ -16,17 +17,20 @@ export function renderScreen(ctx) {
   const wake = h("button", { class: "btn small", title: "Garder l'écran allumé" }, "☀️ Écran allumé");
   const voice = h("button", { class: "btn small", "aria-pressed": String(speakEnabled()) }, speakEnabled() ? "🔊 Voix du MJ" : "🔈 Voix du MJ");
   voice.onclick = () => { setSpeak(!speakEnabled()); voice.textContent = speakEnabled() ? "🔊 Voix du MJ" : "🔈 Voix du MJ"; };
+  const amb = h("button", { class: "btn small" }, ambienceEnabled() ? "🎵 Ambiance" : "🔇 Ambiance");
+  amb.onclick = async () => { await ambienceMenu(); amb.textContent = ambienceEnabled() ? "🎵 Ambiance" : "🔇 Ambiance"; };
   let lock = null;
   wake.onclick = async () => { try { lock = await navigator.wakeLock?.request("screen"); wake.textContent = "☀️ Activé"; } catch { wake.textContent = "Non disponible"; } };
   ctx.addCleanup(() => lock?.release?.());
   ctx.mount(h("div", { class: "screen" },
-    h("div", { class: "screen-title" }, h("div", {}, title, mood), h("div", { class: "row" }, voice, wake, h("button", { class: "btn small", onclick: () => document.documentElement.requestFullscreen?.() }, "Plein écran"),
+    h("div", { class: "screen-title" }, h("div", {}, title, mood), h("div", { class: "row" }, voice, amb, wake, h("button", { class: "btn small", onclick: () => document.documentElement.requestFullscreen?.() }, "Plein écran"),
       h("button", { class: "btn small", onclick: () => go(`#/c/${S.cid}`) }, "Quitter"))),
     h("div", { style: { display: "flex", flexDirection: "column", minHeight: 0 } }, combat, narr), strip));
 
   const draw = (fresh = []) => {
     const c = S.campaign; if (!c) return;
     const sc = c.state?.scene || {};
+    setAmbiance(guessAmbiance(sc));
     title.textContent = sc.title || c.name; mood.textContent = `${MOOD_ICON[sc.mood] || ""} ${sc.location || ""}`;
     const shown = S.log.filter((e) => e.type !== "ooc").slice(-30);
     narr.replaceChildren(...shown.map(renderEntry), c.state?.gmBusy && Date.now() - (c.state.gmBusySince || 0) < 120e3 ? h("div", { class: "gm-thinking" }, "Le Maître du Jeu réfléchit") : null);

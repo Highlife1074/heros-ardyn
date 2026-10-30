@@ -40,7 +40,9 @@ export const DEFAULT_SETTINGS = {
   dice3d: true,
   tts: false,
   houseRules: "",
-  turnMode: "round",        // round (tour de table) | free (libre)
+  turnMode: "round",
+  images: true,             // illustrations des scènes (Gemini via Firebase AI Logic)
+  imageModel: "gemini-nano-banana-2.1",        // round (tour de table) | free (libre)
 };
 
 /** Dé tiré par le générateur cryptographique ; le résultat est enregistré aussitôt et définitivement dans Firestore. */
