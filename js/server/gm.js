@@ -2,6 +2,7 @@ import { HttpsError, logger, platform, randomInt, db, RULES, MONSTERS, BIBLE_ARD
 import { derive, mod, fmtMod, ABI_FR, XP_TABLE, statusFromHp, DAMAGE_FR } from "../engine.js";
 import { applyHpChange } from "./characters.js";
 import { GM_CORE, TONE, DIFFICULTY, NARRATION, GENERIC_WORLD, SUMMARY_PROMPT } from "./prompts.js";
+import { newRound, TURN_GM_RULES } from "./turns.js";
 import { loadWorld, setupText, additionsText, gmAddEntry, revealEntry, CATEGORIES, CONSOLIDATE_PROMPT } from "./worlds.js";
 
 const R = RULES;
@@ -119,6 +120,7 @@ async function buildContext(cid, c, chars, secret, reason) {
   const log = logSnap.docs.map((d) => d.data()).reverse().filter((e) => !e.hiddenFromGm);
   const partyLevel = chars.length ? Math.round(chars.reduce((a, x) => a + x.level, 0) / chars.length) : 1;
   const parts = [];
+  parts.push(`## Déroulement\n${s.turnMode === "round" && !c.state?.combat?.active ? TURN_GM_RULES.round + "\n" : ""}${TURN_GM_RULES.combat}`);
   parts.push(`## Paramètres de la table\n${TONE[s.tone] || TONE.famille}\n${DIFFICULTY[s.difficulty] || DIFFICULTY.normal}\n${NARRATION[s.narration] || NARRATION.moyenne}\nProgression : ${s.xpMode === "milestone" ? "jalons (level_up_ready)" : "points d'expérience (award_xp)"}.${s.houseRules ? "\nRègles maison : " + s.houseRules : ""}${c.premise ? "\nPrémisse de campagne voulue par l'hôte : " + c.premise : ""}`);
   parts.push(`## Groupe (${chars.length} héros, niveau moyen ${partyLevel})\n${chars.map(charSummary).join("\n\n") || "Aucun héros créé pour l'instant."}`);
   if (st.scene?.title) parts.push(`## Scène actuelle\n${st.scene.title}${st.scene.location ? " — " + st.scene.location : ""}${st.scene.mood ? " (" + st.scene.mood + ")" : ""}`);
@@ -483,6 +485,13 @@ export async function runGm(cid, reason = "players", depth = 0) {
     }
     const narration = texts.join("\n\n").trim();
     if (narration) await addLog(cid, { type: "gm", authorName: "Maître du Jeu", portrait: "🐉", text: narration, model: usedModel });
+    // Tour de table : après chaque réponse du MJ, un nouveau tour s'ouvre (sauf combat ou jets de dés en attente).
+    if (settings.turnMode === "round") {
+      const now = (await cref.get()).data();
+      const freshChars = (await db.collection(`campaigns/${cid}/characters`).get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+      const round = now.state?.combat?.active || (now.state?.pendingRolls || []).length ? null : newRound(now, freshChars);
+      await cref.update({ "state.round": round ? { ...round, n: (now.state?.round?.n || 0) + 1 } : { ...(now.state?.round || {}), idx: 999 } });
+    }
     if (fellBack) await cref.update({ "state.modelWarning": `${settings.model} n'est pas accessible avec cette clé : le MJ utilise ${usedModel} en attendant.` });
     else if (c.state?.modelWarning) await cref.update({ "state.modelWarning": FieldValue.delete() });
     await cref.update({

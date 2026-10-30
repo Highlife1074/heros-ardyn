@@ -5,6 +5,7 @@ import { renderSheet } from "./sheet.js";
 import { derive, statusFromHp, fmtMod } from "./engine.js";
 import { codexList } from "./world.js";
 import { micButton } from "./voice.js";
+import { whoseTurn } from "./turnlogic.js";
 
 const R = () => S.rules;
 export { speak, setSpeak, speakEnabled } from "./speech.js";
@@ -43,24 +44,40 @@ export function renderTable(ctx) {
   const thinking = h("div", { class: "gm-thinking hidden" }, "Le Maître du Jeu réfléchit");
   const keyWarn = h("div", { class: "request other hidden" });
   const errBox = h("div", { class: "request other hidden", style: { borderColor: "var(--blood)" } });
+  const turnBar = h("div", { class: "turnbar hidden", "aria-live": "polite" });
 
   // Composer
   const input = h("textarea", { rows: 1, maxlength: 2000, placeholder: "Que fait ton héros ?", "aria-label": "Ton action. Décrivez vos actions chacun votre tour, puis « Au MJ »." });
   let ooc = false;
   const oocBtn = h("button", { class: "btn small ghost mode", title: "Basculer entre parler en jeu et hors-jeu", "aria-pressed": "false" }, "🎭 En jeu");
-  oocBtn.onclick = () => { ooc = !ooc; oocBtn.textContent = ooc ? "💬 Hors-jeu" : "🎭 En jeu"; oocBtn.setAttribute("aria-pressed", String(ooc)); };
+  oocBtn.onclick = () => { ooc = !ooc; oocBtn.textContent = ooc ? "💬 Hors-jeu" : "🎭 En jeu"; oocBtn.setAttribute("aria-pressed", String(ooc)); renderTurn(); };
   const sendBtn = h("button", { class: "btn", title: "Envoyer sans réveiller le MJ (pour laisser les autres joueurs agir d'abord)" }, "Envoyer sans le MJ");
   const gmBtn = h("button", { class: "btn primary gm-btn", title: "Envoyer et demander au MJ de répondre" }, "🐉 Au MJ");
   const diceBtn = h("button", { class: "icon-btn", title: "Lancer des dés libres", "aria-label": "Dés libres" }, "🎲");
   input.addEventListener("input", () => { input.style.height = "auto"; input.style.height = Math.min(140, input.scrollHeight) + "px"; });
   input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && window.innerWidth > 700) { e.preventDefault(); gmBtn.click(); } });
+  const callGm = async () => {
+    if (!PLATFORM.apiKey) { toast(isHost() ? "Saisis d'abord la clé Claude dans ⚙️." : "L'hôte doit d'abord saisir la clé Claude.", "error"); return; }
+    const r = await fn("askGm", { campaignId: S.cid }); if (r.queued) toast("Le MJ termine une réponse, il enchaîne juste après.");
+  };
+  const clearInput = () => { input.value = ""; input.style.height = "auto"; };
   const send = async (askGm) => {
     const text = input.value.trim();
-    if (text) { await postMessage(text, ooc); input.value = ""; input.style.height = "auto"; }
-    if (askGm) {
-      if (!PLATFORM.apiKey) { toast(isHost() ? "Saisis d'abord la clé Claude dans ⚙️." : "L'hôte doit d'abord saisir la clé Claude.", "error"); return; }
-      const r = await fn("askGm", { campaignId: S.cid }); if (r.queued) toast("Le MJ termine une réponse, il enchaîne juste après.");
+    const t = turnNow();
+    // Hors-jeu : toujours permis, ne réveille jamais le MJ
+    if (ooc) { if (!text) return toast("Écris ton message."); await postMessage(text, true); clearInput(); return; }
+    // Tour de table / combat : seul le héros dont c'est le tour joue, puis la main passe
+    if (t.mode === "round" || t.mode === "combat") {
+      const me = myChar();
+      if (!me || me.id !== t.charId) return toast(`Ce n'est pas ton tour : c'est à ${S.chars[t.charId]?.name || "un autre héros"}.`, "error");
+      if (!text) return toast("Décris ce que fait ton héros, ou passe ton tour.");
+      const r = await fn("submitTurn", { campaignId: S.cid, text }); clearInput();
+      if (r.callGm) await callGm();
+      return;
     }
+    if (t.mode === "gm" && !isHost()) return toast("Les adversaires agissent : attends que le MJ te rende la main.");
+    if (text) { await postMessage(text, false); clearInput(); }
+    if (askGm) await callGm();
     else if (!text) toast("Écris d'abord ce que fait ton héros.");
   };
   sendBtn.onclick = busy(sendBtn, () => send(false));
@@ -82,7 +99,7 @@ export function renderTable(ctx) {
     toast(speakEnabled() ? "Voix du MJ activée sur cet appareil." : "Voix du MJ coupée.");
   };
 
-  const main = h("div", { class: "game-main" }, sceneEl, initEl, logEl, mainPanel, reqEl, keyWarn, errBox, thinking, composer, bottom);
+  const main = h("div", { class: "game-main" }, sceneEl, initEl, logEl, mainPanel, reqEl, keyWarn, errBox, thinking, turnBar, composer, bottom);
   ctx.mount(
     topbar(h("button", { class: "icon-btn", "aria-label": "Retour aux campagnes", onclick: () => go("#/") }, "‹"), titleEl,
       ttsBtn, h("button", { class: "icon-btn", title: "Le monde : codex, cadre et bible", "aria-label": "Le monde", onclick: () => go(`#/c/${S.cid}/world`) }, "🗺️"),
@@ -135,6 +152,48 @@ export function renderTable(ctx) {
     }));
   }
 
+  function turnNow() { return S.campaign ? whoseTurn(S.campaign, Object.values(S.chars)) : { mode: "free" }; }
+
+  /** Bandeau « à qui le tour » + verrouillage de la zone de texte pour les autres. */
+  function renderTurn() {
+    const t = turnNow(); const me = myChar(); const host = isHost();
+    const cur = S.chars[t.charId];
+    const myTurn = !!(me && cur && me.id === cur.id);
+    const turnBased = t.mode === "round" || t.mode === "combat";
+    turnBar.classList.toggle("hidden", !(turnBased || t.mode === "gm" || (t.waitingRolls && S.campaign.settings?.turnMode !== "free")));
+    const chips = [];
+    if (t.mode === "round") {
+      const r = t.round;
+      chips.push(h("div", { class: "turn-chips" }, ...r.order.map((id, i) => {
+        const c = S.chars[id]; if (!c) return null;
+        const st = i < r.idx ? "done" : i === r.idx ? "now" : "next";
+        return h("span", { class: `turn-chip ${st}` }, st === "done" ? "✓ " : st === "now" ? "▶ " : "", c.portrait || "", " ", c.name);
+      })));
+    }
+    let label;
+    if (t.mode === "round") label = myTurn ? h("b", {}, `🎯 À toi de jouer, ${cur.name} !`) : h("span", {}, `⏳ Tour de table : au tour de `, h("b", {}, cur?.name || "?"), cur ? ` (${cur.ownerName})` : "");
+    else if (t.mode === "combat") label = myTurn ? h("b", {}, `⚔️ À toi d'agir, ${cur.name} !`) : h("span", {}, `⚔️ Combat : au tour de `, h("b", {}, cur?.name || "?"));
+    else if (t.mode === "gm") label = h("span", {}, "⚔️ Les adversaires agissent : le MJ a la main.");
+    else if (t.waitingRolls) label = h("span", {}, "🎲 Lancez d'abord les dés demandés : le MJ reprendra ensuite.");
+    const actions = [];
+    if (turnBased && myTurn) actions.push(btnPass("Passer mon tour"));
+    if (turnBased && host && !myTurn && cur) actions.push(btnPass(`Passer ${cur.name}`, true));
+    if (t.mode === "round" && host) actions.push(h("button", { class: "btn small", onclick: busyFn(async () => { const r = await fn("closeRound", { campaignId: S.cid }); if (r.callGm) await callGm(); }) }, "Clore le tour"));
+    if (t.mode === "gm" && host) actions.push(h("button", { class: "btn small", onclick: busyFn(callGm) }, "Relancer le MJ"));
+    turnBar.replaceChildren(h("div", { class: "turn-line" }, h("div", { class: "grow" }, label), ...actions), ...chips);
+    // Zone de texte : ouverte au joueur dont c'est le tour (le hors-jeu reste toujours possible)
+    const locked = !ooc && ((turnBased && !myTurn) || (t.mode === "gm" && !host));
+    input.disabled = locked;
+    input.placeholder = locked ? (t.mode === "gm" ? "Le MJ joue les adversaires…" : `Au tour de ${cur?.name || "?"} — passe en 💬 hors-jeu pour parler`) : turnBased ? "Décris l'action de ton héros pour ce tour" : "Que fait ton héros ?";
+    gmBtn.textContent = turnBased ? "✅ Jouer mon tour" : "🐉 Au MJ";
+    gmBtn.disabled = locked;
+    sendBtn.classList.toggle("hidden", turnBased || t.mode === "gm");
+  }
+  function busyFn(f) { return async (e) => { const b = e.currentTarget; b.disabled = true; try { await f(); } catch (err) { toast(errMsg(err), "error"); } finally { b.disabled = false; } }; }
+  function btnPass(label, hostSkip = false) {
+    return h("button", { class: "btn small", onclick: busyFn(async () => { const r = await fn("submitTurn", { campaignId: S.cid, pass: true, hostSkip }); if (r.callGm) await callGm(); }) }, label);
+  }
+
   let lastCount = 0;
   function renderLog(fresh = []) {
     const nearBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 160;
@@ -162,7 +221,7 @@ export function renderTable(ctx) {
         h("p", {}, "Si le message parle de permission : vérifie que les règles Firestore sont publiées, et que tu as bien rejoint la campagne avec son code."),
         h("button", { class: "btn", onclick: () => go("#/") }, "Retour"))); return;
     }
-    renderScene(); renderTabs();
+    renderScene(); renderTabs(); renderTurn();
     const story = tab === "story" || window.innerWidth >= 980;
     for (const el of [sceneEl, logEl, reqEl, composer]) el.classList.toggle("hidden", !story);
     initEl.classList.toggle("hidden", !story || !S.campaign.state?.combat?.active);

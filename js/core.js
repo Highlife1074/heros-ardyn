@@ -16,7 +16,7 @@ export const fbApp = initializeApp(firebaseConfig);
 export const auth = getAuth(fbApp);
 // ignoreUndefinedProperties : un champ vide ne fait plus échouer une écriture.
 export const fs = initializeFirestore(fbApp, { ignoreUndefinedProperties: true });
-export const APP_VERSION = "2026-10-30 h";
+export const APP_VERSION = "2026-10-30 i";
 
 // ---------------------------------------------------------------- Plateforme pour la logique de jeu (js/server)
 // Même interface que l'ancienne version serveur : la logique n'a pas eu besoin d'être réécrite.
@@ -112,9 +112,9 @@ export function loadServer() {
     Object.assign(PLATFORM, { RULES: rules, MONSTERS: monsters, BIBLE: bible });
     S.rules = rules;
     globalThis.__PLATFORM__ = PLATFORM;
-    const [campaigns, characters, dice, gm, worlds] = await Promise.all([
-      import("./server/campaigns.js"), import("./server/characters.js"), import("./server/dice.js"), import("./server/gm.js"), import("./server/worlds.js")]);
-    Object.assign(server, { campaigns, characters, dice, gm, worlds });
+    const [campaigns, characters, dice, gm, worlds, turns] = await Promise.all([
+      import("./server/campaigns.js"), import("./server/characters.js"), import("./server/dice.js"), import("./server/gm.js"), import("./server/worlds.js"), import("./server/turns.js")]);
+    Object.assign(server, { campaigns, characters, dice, gm, worlds, turns });
   })().catch((e) => { ready = null; throw e; }); // on pourra réessayer
   return ready;
 }
@@ -128,6 +128,7 @@ const ACTIONS = {
   giveGold: () => server.characters.giveGold, setPrepared: () => server.characters.setPrepared, castSpell: () => server.characters.castSpell,
   useResource: () => server.characters.useResource, hostAdjust: () => server.characters.hostAdjust,
   roll: () => server.dice.roll,
+  submitTurn: () => server.turns.submitTurn, closeRound: () => server.turns.closeRound,
   askGm: () => server.gm.askGm, hostGmControl: () => server.gm.hostGmControl, translate: () => server.gm.translate, pingGm: () => server.gm.pingGm,
   consolidateWorld: () => server.gm.consolidateWorld, getWorldVersion: () => server.gm.getWorldVersion,
   createWorld: () => server.worlds.createWorld, updateWorld: () => server.worlds.updateWorld, editWorldEntry: () => server.worlds.editEntry,

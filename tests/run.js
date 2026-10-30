@@ -229,4 +229,17 @@ await t("Bible v2 : fusion des ajouts validés, nouvelle campagne dans le même 
   await expectErr(camp.createCampaign(K, { name: "Vol", worldId: wid }), /appartient/);
 });
 
+await t("tour de table : ordre tournant, tour imposé, MJ appelé quand tout le monde a joué", async () => {
+  const turns = await import("../js/server/turns.js");
+  const c = F.raw(`campaigns/${cid}`); const chars = F.dump(`campaigns/${cid}/characters/`).map(([p, d]) => ({ id: p.split("/").pop(), ...d }));
+  const r1 = turns.newRound({ ...c, state: {} }, chars); const r2 = turns.newRound({ ...c, state: { round: r1 } }, chars);
+  assert.equal(r1.order.length, 2); assert.deepEqual(r2.order, [r1.order[1], r1.order[0]], "l'ordre tourne à chaque tour");
+  await F.db.doc(`campaigns/${cid}`).update({ "state.round": r1, "state.combat": { active: false }, "state.pendingRolls": [], "settings.turnMode": "round" });
+  const first = chars.find((x) => x.id === r1.order[0]); const second = chars.find((x) => x.id === r1.order[1]);
+  await expectErr(turns.submitTurn(second.ownerUid === P ? K : second.ownerUid, { campaignId: cid, text: "Je fonce !" }), /tour de/);
+  const a = await turns.submitTurn(first.ownerUid, { campaignId: cid, text: "J'observe." }); assert.equal(a.callGm, false);
+  const b = await turns.submitTurn(second.ownerUid, { campaignId: cid, pass: true }); assert.equal(b.callGm, true);
+  assert.equal(F.raw(`campaigns/${cid}`).state.round.idx, 2);
+});
+
 console.log(`\n${ok} tests réussis. Appels modèle simulés : ${calls.length}`);

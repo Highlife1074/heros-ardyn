@@ -40,6 +40,7 @@ export const DEFAULT_SETTINGS = {
   dice3d: true,
   tts: false,
   houseRules: "",
+  turnMode: "round",        // round (tour de table) | free (libre)
 };
 
 /** Dé tiré par le générateur cryptographique ; le résultat est enregistré aussitôt et définitivement dans Firestore. */

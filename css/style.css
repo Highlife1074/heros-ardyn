@@ -248,3 +248,12 @@ body.screen-mode { font-size: 22px; }
 .icon-btn.mic.listening { color: var(--blood); background: color-mix(in srgb, var(--blood) 18%, transparent); animation: pulse 1.2s ease-in-out infinite; }
 @keyframes pulse { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--blood) 25%, transparent); } }
 .composer .inner .icon-btn { flex: none; }
+
+/* Tour de table */
+.turnbar { border-top: 1px solid var(--line); padding: 8px 12px; background: color-mix(in srgb, var(--verdigris) 10%, var(--ink)); }
+.turnbar .turn-line { max-width: 760px; margin: 0 auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.turn-chips { max-width: 760px; margin: 6px auto 0; display: flex; gap: 6px; flex-wrap: wrap; }
+.turn-chip { font-size: .8rem; padding: .15em .6em; border-radius: 999px; border: 1px solid var(--line); color: var(--vellum-dim); }
+.turn-chip.now { border-color: var(--bronze); color: var(--bronze); font-weight: 700; }
+.turn-chip.done { color: var(--verdigris); border-color: color-mix(in srgb, var(--verdigris) 50%, var(--line)); }
+.composer textarea:disabled { opacity: .55; }
