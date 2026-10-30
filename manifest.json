@@ -1,0 +1,3 @@
+{ "name": "Héros d'Ardyn", "short_name": "Ardyn", "start_url": "./", "display": "standalone",
+  "background_color": "#161c27", "theme_color": "#161c27",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }] }

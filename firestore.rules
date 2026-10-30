@@ -1,0 +1,56 @@
+rules_version = '2';
+// Règles de sécurité de Héros d'Ardyn — à coller dans Console Firebase → Firestore Database → Règles → Publier.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function uid() { return request.auth.uid; }
+    function campaign(cid) { return get(/databases/$(database)/documents/campaigns/$(cid)).data; }
+    function world(wid) { return get(/databases/$(database)/documents/worlds/$(wid)).data; }
+    function changes() { return request.resource.data.diff(resource.data).affectedKeys(); }
+
+    // Profil : prénom et clé Claude mémorisée, visibles par toi seul.
+    match /users/{userId} {
+      allow read, write: if signedIn() && uid() == userId;
+    }
+
+    // Codes d'invitation : lisibles par tout joueur connecté qui connaît le code.
+    match /invites/{code} {
+      allow read: if signedIn();
+      allow create: if signedIn();
+    }
+
+    // Traductions de règles mises en cache (partagées).
+    match /translations/{h} {
+      allow read, create: if signedIn();
+    }
+
+    match /campaigns/{cid} {
+      allow read: if signedIn() && uid() in resource.data.members;
+      allow create: if signedIn() && request.resource.data.ownerUid == uid() && request.resource.data.members == [uid()];
+      // Un membre peut tout faire ; un non-membre peut seulement s'ajouter lui-même à la table (avec le code d'invitation).
+      allow update: if signedIn() && (uid() in resource.data.members
+        || (changes().hasOnly(['members', 'memberNames'])
+            && request.resource.data.members.hasAll(resource.data.members)
+            && request.resource.data.members.size() == resource.data.members.size() + 1
+            && uid() in request.resource.data.members
+            && request.resource.data.members.size() <= 8));
+      allow delete: if signedIn() && resource.data.ownerUid == uid();
+
+      match /{sub=**} {
+        allow read, write: if signedIn() && uid() in campaign(cid).members;
+      }
+    }
+
+    match /worlds/{wid} {
+      allow read: if signedIn() && (resource.data.ownerUid == uid() || uid() in resource.data.readers);
+      allow create: if signedIn() && request.resource.data.ownerUid == uid();
+      allow update: if signedIn() && (resource.data.ownerUid == uid() || uid() in resource.data.readers
+        || (changes().hasOnly(['readers']) && uid() in request.resource.data.readers));
+      allow delete: if signedIn() && resource.data.ownerUid == uid();
+
+      match /{sub=**} {
+        allow read, write: if signedIn() && (world(wid).ownerUid == uid() || uid() in world(wid).readers);
+      }
+    }
+  }
+}
