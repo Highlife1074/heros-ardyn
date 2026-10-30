@@ -42,6 +42,7 @@ export function renderTable(ctx) {
   const mainPanel = h("div", { class: "side-body hidden", style: { overflowY: "auto", padding: "14px", flex: 1 } });
   const thinking = h("div", { class: "gm-thinking hidden" }, "Le Maître du Jeu réfléchit");
   const keyWarn = h("div", { class: "request other hidden" });
+  const errBox = h("div", { class: "request other hidden", style: { borderColor: "var(--blood)" } });
 
   // Composer
   const input = h("textarea", { rows: 1, maxlength: 2000, placeholder: "Que fait ton héros ?", "aria-label": "Ton action. Décrivez vos actions chacun votre tour, puis « Au MJ »." });
@@ -78,7 +79,7 @@ export function renderTable(ctx) {
     toast(speakEnabled() ? "Voix du MJ activée sur cet appareil." : "Voix du MJ coupée.");
   };
 
-  const main = h("div", { class: "game-main" }, sceneEl, initEl, logEl, mainPanel, reqEl, keyWarn, thinking, composer, bottom);
+  const main = h("div", { class: "game-main" }, sceneEl, initEl, logEl, mainPanel, reqEl, keyWarn, errBox, thinking, composer, bottom);
   ctx.mount(
     topbar(h("button", { class: "icon-btn", "aria-label": "Retour aux campagnes", onclick: () => go("#/") }, "‹"), titleEl,
       ttsBtn, h("button", { class: "icon-btn", title: "Le monde : codex, cadre et bible", "aria-label": "Le monde", onclick: () => go(`#/c/${S.cid}/world`) }, "🗺️"),
@@ -96,6 +97,8 @@ export function renderTable(ctx) {
     titleEl.textContent = c.name;
     hostBtn.classList.toggle("hidden", !isHost());
     sceneEl.replaceChildren(h("span", {}, MOOD_ICON[sc.mood] || "🗺️"), h("span", { class: "name" }, sc.title || "Avant l'aventure"), sc.location ? h("span", { class: "mood" }, sc.location) : null);
+    errBox.classList.toggle("hidden", !S.lastError);
+    if (S.lastError) errBox.replaceChildren(h("div", { class: "what small" }, "⚠️ " + S.lastError + (/permission|insufficient/i.test(S.lastError) ? " — vérifie que les règles Firestore sont publiées." : "")));
     keyWarn.classList.toggle("hidden", !!PLATFORM.apiKey);
     keyWarn.replaceChildren(h("div", { class: "what" }, isHost() ? "Le MJ n'a pas encore de clé Claude." : "Le MJ attend que l'hôte saisisse la clé Claude."),
       isHost() ? h("button", { class: "btn small primary", onclick: () => go(`#/c/${S.cid}/host`) }, "Saisir la clé") : null);

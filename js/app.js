@@ -77,7 +77,8 @@ function renderHome() {
       h("button", { class: "icon-btn", title: "Thème clair / sombre", "aria-label": "Changer de thème", onclick: toggleTheme }, "🌓"),
       h("button", { class: "btn ghost small", onclick: () => signOut(auth) }, "Déconnexion")),
     h("main", { class: "wrap stack" },
-      h("h2", {}, `Bonjour ${S.displayName || ""} !`),
+      h("h2", { style: { marginBottom: "2px" } }, `Bonjour ${S.displayName || ""} !`),
+      h("p", { class: "small muted", style: { marginTop: 0 } }, `Connecté avec ${S.user.email || "ce compte"}`),
       h("div", { class: "row" }, createBtn, joinBtn),
       h("section", { class: "panel" }, h("h3", {}, "Mes campagnes"), list),
       h("p", { class: "small muted" }, `Version ${APP_VERSION}`)));
