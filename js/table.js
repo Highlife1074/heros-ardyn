@@ -4,6 +4,7 @@ import { doRoll } from "./actions.js";
 import { renderSheet } from "./sheet.js";
 import { derive, statusFromHp, fmtMod } from "./engine.js";
 import { codexList } from "./world.js";
+import { micButton } from "./voice.js";
 
 const R = () => S.rules;
 let speakOn = false;
@@ -73,7 +74,7 @@ export function renderTable(ctx) {
   gmBtn.onclick = busy(gmBtn, () => send(true));
   diceBtn.onclick = freeDice;
   sendBtn.className = "btn small ghost";
-  const composer = h("div", { class: "composer" }, h("div", { class: "inner" }, diceBtn, input, gmBtn),
+  const composer = h("div", { class: "composer" }, h("div", { class: "inner" }, diceBtn, micButton(input), input, gmBtn),
     h("div", { class: "sub" }, oocBtn, h("span", { class: "grow" }), sendBtn));
 
   const bottom = h("nav", { class: "bottomnav", "aria-label": "Sections" });

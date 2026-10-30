@@ -243,3 +243,8 @@ body.screen-mode { font-size: 22px; }
 .screen .pc-card { min-width: 180px; background: var(--slate); border: 1px solid var(--line); border-radius: var(--radius-m); padding: 10px 12px; }
 .screen-title { display: flex; justify-content: space-between; align-items: center; padding: 14px 6vw; border-bottom: 1px solid var(--line); }
 .screen-title h1 { margin: 0; font-size: 1.6rem; }
+
+/* Dictée */
+.icon-btn.mic.listening { color: var(--blood); background: color-mix(in srgb, var(--blood) 18%, transparent); animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--blood) 25%, transparent); } }
+.composer .inner .icon-btn { flex: none; }
