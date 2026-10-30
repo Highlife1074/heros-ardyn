@@ -67,6 +67,7 @@ const TOOLS = [
       mood: { type: "string", enum: ["calme", "mystère", "tension", "combat", "fête", "repos", "danger"] },
       setting: { type: "string", enum: Object.keys(SETTINGS), description: "Décor de l'illustration et des sons" },
       time: { type: "string", enum: Object.keys(TIMES) }, weather: { type: "string", enum: Object.keys(WEATHERS) },
+      visual: { type: "string", description: "In ENGLISH, 1-3 sentences: what a painter would show of this place (architecture, landscape, light, notable details). No player characters. Used to paint the scene illustration." },
       map_place: { type: "string", description: "Lieu sur la carte du monde : un nom de la liste « Carte » si possible, sinon le nom d'un nouveau lieu (village, auberge, ruine…) qui sera ajouté à la carte" },
       map_near: { type: "string", description: "Pour un nouveau lieu : lieu connu de la carte dont il est proche" },
       map_direction: { type: "string", enum: DIRECTIONS, description: "Pour un nouveau lieu : direction depuis map_near" },
@@ -402,6 +403,7 @@ async function execTool(ctx, name, input) {
     case "update_scene": {
       const st = ctx.c.state || {};
       const scene = { title: str(input.title, 80), location: str(input.location, 80), mood: str(input.mood, 20), at: Date.now() };
+      if (input.visual) scene.visual = str(input.visual, 500);
       for (const [k, list] of [["setting", SETTINGS], ["time", TIMES], ["weather", WEATHERS]]) if (list[input[k]]) scene[k] = input[k];
       const upd = { "state.scene": scene };
       let note = "";
@@ -419,6 +421,7 @@ async function execTool(ctx, name, input) {
       }
       ctx.c.state = { ...st, scene, places: upd["state.places"] || st.places };
       await db.doc(`campaigns/${cid}`).update(upd);
+      platform.requestImage?.(cid, scene, ctx.world); // illustration peinte, en arrière-plan
       return "Scène mise à jour." + note;
     }
     case "update_quest": {

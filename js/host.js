@@ -1,4 +1,5 @@
 import { S, fn, go, isHost, activeChars, PLATFORM } from "./core.js";
+import { IMAGE_MODELS } from "./illustrate.js";
 import { h, toast, busy, errMsg, confirmBox, topbar, modal } from "./ui.js";
 
 const MODELS = [
@@ -43,6 +44,21 @@ export function renderHost(ctx) {
     const keyState = h("p", { class: "small", style: { marginTop: "6px" } }, PLATFORM.apiKey ? "✅ Clé enregistrée." : "⚠️ Aucune clé : le MJ ne peut pas parler tant qu'elle n'est pas saisie.");
     const saveKey = h("button", { class: "btn primary" }, "Enregistrer");
     saveKey.onclick = busy(saveKey, async () => { await fn("setApiKey", { campaignId: S.cid, key: keyInput.value }); keyState.textContent = "✅ Clé enregistrée."; toast("Clé enregistrée."); });
+    // Illustrations peintes (Gemini)
+    const gKey = h("input", { type: "password", autocomplete: "off", placeholder: "AIza…", value: PLATFORM.geminiKey || "" });
+    const gModel = h("select", {}, ...IMAGE_MODELS.map(([v, l]) => h("option", { value: v, selected: (PLATFORM.geminiModel || IMAGE_MODELS[0][0]) === v }, l)));
+    const ist = c.state?.imageStatus;
+    const gState = h("p", { class: "small", style: { marginTop: "6px" } }, !PLATFORM.geminiKey ? "Facultatif : sans clé, les scènes gardent le décor dessiné." : ist && !ist.ok ? `⚠️ Dernière illustration en échec : ${ist.msg}` : "✅ Clé enregistrée : chaque nouvelle scène sera peinte.");
+    const gSave = h("button", { class: "btn primary" }, "Enregistrer");
+    gSave.onclick = busy(gSave, async () => { await fn("setImageKey", { campaignId: S.cid, key: gKey.value, model: gModel.value }); gState.textContent = gKey.value ? "✅ Clé enregistrée : chaque nouvelle scène sera peinte." : "Clé retirée."; toast("Enregistré."); });
+    const repaint = h("button", { class: "btn" }, "🎨 Repeindre la scène actuelle");
+    repaint.onclick = busy(repaint, async () => {
+      if (!PLATFORM.geminiKey) return toast("Enregistre d'abord une clé Gemini.", "error");
+      if (!c.state?.scene?.title) return toast("Aucune scène pour l'instant : lance l'aventure.", "error");
+      const { illustrate } = await import("./illustrate.js");
+      await illustrate(S.cid, S.campaign.state.scene, S.world, { force: true });
+      toast("Nouvelle illustration prête.");
+    });
     const test = h("button", { class: "btn" }, "Tester le Maître du Jeu");
     test.onclick = busy(test, async () => { const r = await fn("pingGm", { campaignId: S.cid }); modal("Test du Maître du Jeu", h("div", {}, ...r.text.split(" | ").map((l) => h("p", { class: "small" }, l))), [{ label: "OK", class: "btn primary", value: true }]); });
     const ctl = (label, action, conf) => { const b = h("button", { class: "btn small" }, label);
@@ -52,6 +68,9 @@ export function renderHost(ctx) {
       h("section", { class: "panel" }, h("h3", {}, "Clé Claude"),
         h("p", { class: "small muted" }, "La même clé que pour EduSmart convient (console.anthropic.com → API Keys). Elle est mémorisée pour tes prochaines campagnes."),
         h("div", { class: "row" }, h("div", { class: "grow" }, keyInput), saveKey), keyState),
+      h("section", { class: "panel" }, h("h3", {}, "Illustrations peintes (Gemini)"),
+        h("p", { class: "small muted" }, "Une clé Google AI Studio (aistudio.google.com → Get API key) permet de peindre chaque lieu comme un décor de jeu de rôle. Une image par lieu, heure et météo, réutilisée ensuite : quelques centimes par nouveau lieu, facturés par Google."),
+        h("div", { class: "row" }, h("div", { class: "grow" }, gKey), gSave), h("label", {}, "Modèle"), gModel, gState, h("div", { class: "row", style: { marginTop: "8px" } }, repaint)),
       h("section", { class: "panel" }, h("h3", {}, "Inviter les joueurs"),
         h("p", {}, "Chaque joueur crée son compte, puis « Rejoindre avec un code » :"),
         h("p", { style: { fontSize: "2rem", letterSpacing: ".25em", fontFamily: "var(--serif)", color: "var(--bronze)", margin: ".2em 0" } }, c.inviteCode),

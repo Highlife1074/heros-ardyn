@@ -9,6 +9,7 @@ Même format que mes autres apps : **GitHub Pages** pour le site, **Firebase** (
 - Monde vivant (🗺️) : cadre fixé par l'hôte (Lancedragon / Seigneur des Anneaux / Game of Thrones, magie rare, interdits, classes et peuples jouables), ajouts du MJ à relire, Bible vN téléchargeable, codex des joueurs.
 - Dés 3D ; chaque jet est enregistré immédiatement dans Firestore et visible de toute la table (impossible de relancer en douce).
 - Scène illustrée : décor animé (21 décors, heure, météo, ambiance) choisi par le MJ, mini-carte de la zone et carte du monde (🧭) avec « vous êtes ici » et le parcours des héros. Carte d'Ardyn dessinée d'après la bible (`js/atlas.js`, coordonnées modifiables) ; continent généré pour les autres mondes.
+- Illustrations peintes par Gemini (« Nano Banana ») : facultatif, clé Google AI Studio à saisir dans ⚙️. Une image par lieu, heure et météo, partagée par la table et réutilisée ; sans clé, le décor est dessiné puis repeint dans le navigateur.
 - Ambiance sonore synthétisée en direct (vent, pluie, orage, feu, oiseaux, taverne, tambours de combat…), bouton 🔇/🎵/🎶 sur la scène ; elle baisse quand la voix du MJ parle.
 - Écran de table (📺) avec voix du MJ, grande illustration et ambiance.
 

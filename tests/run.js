@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 const here = new URL(".", import.meta.url);
 const load = (f) => readFileSync(new URL(`../data/${f}`, here), "utf8");
-const gmWakes = [];
+const gmWakes = []; const imageAsks = [];
 
 const script = []; // réponses successives du « modèle »
 const calls = [];
@@ -14,6 +14,7 @@ globalThis.__TEST__ = {
   RULES: JSON.parse(load("rules.json")), MONSTERS: JSON.parse(load("monsters.json")), BIBLE: load("bible-ardyn.md"),
   hash: async (t) => createHash("sha1").update(t).digest("hex"),
   requestGm: (cid, reason) => gmWakes.push({ cid, reason }),
+  requestImage: (cid, scene) => imageAsks.push(scene),
   anthropic: { messages: {
     create: async (req) => { calls.push(req); const r = script.shift(); if (!r) throw new Error("script vide"); return r(req); },
     stream: (req) => ({ finalMessage: async () => { calls.push(req); return script.shift()(req); } }),
@@ -91,11 +92,12 @@ await t("le MJ ouvre l'aventure et lance un combat", async () => {
 });
 
 await t("carte : nouveau lieu situé près d'un lieu connu, parcours, illustration", async () => {
-  script.push(resp([tool("update_scene", { title: "L'auberge du Sanglier", setting: "taverne", time: "nuit", mood: "repos", map_place: "Auberge du Sanglier", map_near: "Moncalm", map_direction: "ouest", map_distance: "proche" })]));
+  script.push(resp([tool("update_scene", { title: "L'auberge du Sanglier", setting: "taverne", time: "nuit", mood: "repos", visual: "A smoky timber tavern", map_place: "Auberge du Sanglier", map_near: "Moncalm", map_direction: "ouest", map_distance: "proche" })]));
   script.push(resp([{ type: "text", text: "Une auberge enfumée." }], "end_turn"));
   await gm.runGm(cid, "players");
   const c = F.raw(`campaigns/${cid}`);
   assert.equal(c.state.scene.place, "Auberge du Sanglier");
+  assert.equal(imageAsks.at(-1).visual, "A smoky timber tavern"); assert.equal(c.state.scene.visual, "A smoky timber tavern");
   assert.deepEqual(c.state.places.map((p) => p.name), ["Moncalm", "Auberge du Sanglier"]);
   const [a, b] = c.state.places; assert.ok(b.x < a.x && a.x - b.x < 40, "à l'ouest et proche");
   assert.match(calls.at(-2).messages[0].content, /Lieux connus : .*Handorf/);

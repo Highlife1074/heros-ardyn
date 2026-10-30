@@ -16,7 +16,7 @@ export const fbApp = initializeApp(firebaseConfig);
 export const auth = getAuth(fbApp);
 // ignoreUndefinedProperties : un champ vide ne fait plus échouer une écriture.
 export const fs = initializeFirestore(fbApp, { ignoreUndefinedProperties: true });
-export const APP_VERSION = "2026-10-30 f";
+export const APP_VERSION = "2026-10-30 g";
 
 // ---------------------------------------------------------------- Plateforme pour la logique de jeu (js/server)
 // Même interface que l'ancienne version serveur : la logique n'a pas eu besoin d'être réécrite.
@@ -99,6 +99,9 @@ export const PLATFORM = {
   anthropic: { messages: { create: (b) => claude(b), stream: (b) => ({ finalMessage: () => claude(b, true) }) } },
   hash: sha1,
   requestGm: (cid, reason) => server.gm.runGm(cid, reason).catch((e) => console.error(e)),
+  // Illustration peinte de la scène (Gemini), si l'hôte a donné une clé
+  requestImage: (cid, scene, world) => { if (PLATFORM.geminiKey) import("./illustrate.js").then((m) => m.illustrate(cid, scene, world)).catch((e) => console.warn(e)); },
+  geminiKey: "", geminiModel: "",
 };
 const server = {};
 let ready = null;
@@ -122,7 +125,7 @@ export function loadServer() {
 const ACTIONS = {
   createCampaign: () => server.campaigns.createCampaign, joinCampaign: () => server.campaigns.joinCampaign,
   updateCampaign: () => server.campaigns.updateCampaign, removeMember: () => server.campaigns.removeMember,
-  setActiveCharacter: () => server.campaigns.setActiveCharacter, setApiKey: () => server.campaigns.setApiKey,
+  setActiveCharacter: () => server.campaigns.setActiveCharacter, setApiKey: () => server.campaigns.setApiKey, setImageKey: () => server.campaigns.setImageKey,
   rollAbilityScores: () => server.characters.rollAbilityScores, createCharacter: () => server.characters.createCharacter,
   levelUp: () => server.characters.levelUp, rest: () => server.characters.rest, inventory: () => server.characters.inventory,
   giveGold: () => server.characters.giveGold, setPrepared: () => server.characters.setPrepared, castSpell: () => server.characters.castSpell,
@@ -166,7 +169,7 @@ export function openCampaign(cid) {
   S.cid = cid; S.campaignError = false; S.lastError = null;
   S.subs.push(onSnapshot(doc(fs, "campaigns", cid), (snap) => { S.campaign = snap.exists() ? { id: snap.id, ...snap.data() } : null; watchWorld(S.campaign?.worldId); emit("campaign"); },
     (e) => { listenError("Lecture de la campagne")(e); S.campaign = null; S.campaignError = true; emit("campaign"); }));
-  S.subs.push(onSnapshot(doc(fs, "campaigns", cid, "secret", "config"), (snap) => { PLATFORM.apiKey = snap.exists() ? snap.data().apiKey || "" : ""; emit("key"); }, () => {}));
+  S.subs.push(onSnapshot(doc(fs, "campaigns", cid, "secret", "config"), (snap) => { const d = snap.exists() ? snap.data() : {}; PLATFORM.apiKey = d.apiKey || ""; PLATFORM.geminiKey = d.geminiKey || ""; PLATFORM.geminiModel = d.geminiModel || ""; emit("key"); }, () => {}));
   S.subs.push(onSnapshot(collection(fs, "campaigns", cid, "characters"), (snap) => {
     S.chars = Object.fromEntries(snap.docs.map((d) => [d.id, { id: d.id, ...d.data() }])); emit("chars");
   }, listenError("Lecture des personnages")));
@@ -180,7 +183,7 @@ export function openCampaign(cid) {
 }
 export function closeCampaign() {
   S.subs.forEach((u) => u()); S.subs = []; S.cid = null; S.campaign = null; S.chars = {}; S.log = [];
-  PLATFORM.apiKey = "";
+  PLATFORM.apiKey = ""; PLATFORM.geminiKey = ""; PLATFORM.geminiModel = "";
   watchWorld(null);
 }
 

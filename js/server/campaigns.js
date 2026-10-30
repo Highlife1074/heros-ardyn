@@ -37,7 +37,7 @@ export async function createCampaign(uid, { name, setting = "ardyn", premise = "
   await db.doc(`campaigns/${ref.id}/secret/gm`).set({ pending: {}, resolved: [], memory: [], combatants: {} });
   // Reprend la clé Claude déjà utilisée par l'hôte (comme EduSmart : saisie une fois).
   const prof = await db.doc(`users/${uid}`).get();
-  await db.doc(`campaigns/${ref.id}/secret/config`).set({ apiKey: prof.exists ? prof.data().claudeKey || "" : "", at: Date.now() });
+  await db.doc(`campaigns/${ref.id}/secret/config`).set({ apiKey: prof.exists ? prof.data().claudeKey || "" : "", geminiKey: prof.exists ? prof.data().geminiKey || "" : "", geminiModel: prof.exists ? prof.data().geminiModel || "" : "", at: Date.now() });
   return { id: ref.id, inviteCode };
 }
 
@@ -66,6 +66,16 @@ export async function setApiKey(uid, { campaignId, key }) {
   if (k && !/^sk-ant-/.test(k)) throw new HttpsError("invalid-argument", "Une clé Claude commence par « sk-ant- ».");
   await db.doc(`campaigns/${campaignId}/secret/config`).set({ apiKey: k, at: Date.now() }, { merge: true });
   await db.doc(`users/${uid}`).set({ claudeKey: k }, { merge: true });
+  return { ok: true };
+}
+
+/** Clé Gemini (illustrations des scènes) : facultative, mémorisée sur le profil de l'hôte. */
+export async function setImageKey(uid, { campaignId, key, model }) {
+  await loadCampaign(campaignId, uid, { ownerOnly: true });
+  const k = str(key, 300).trim(), m = str(model, 80).trim();
+  if (k && !/^AIza/.test(k)) throw new HttpsError("invalid-argument", "Une clé Gemini (Google AI Studio) commence par « AIza ».");
+  await db.doc(`campaigns/${campaignId}/secret/config`).set({ geminiKey: k, geminiModel: m, at: Date.now() }, { merge: true });
+  await db.doc(`users/${uid}`).set({ geminiKey: k, geminiModel: m }, { merge: true });
   return { ok: true };
 }
 

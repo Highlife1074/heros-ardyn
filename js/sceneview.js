@@ -1,5 +1,5 @@
 // Bandeau de scène illustré : décor animé, mini-carte de la zone, carte du monde et ambiance sonore.
-import { S, MOOD_ICON } from "./core.js";
+import { S, MOOD_ICON, PLATFORM, isHost } from "./core.js";
 import { h, modal } from "./ui.js";
 import { renderSceneryLayers, sceneParams, SETTINGS, TIMES, WEATHERS } from "./scenery.js";
 import { paintScene, cloneCanvas } from "./paint.js";
@@ -40,12 +40,27 @@ export function sceneCard({ big = false } = {}) {
     art.replaceChildren(base, fx);
     try {
       const painted = cloneCanvas(await paintScene(l.base, l.key));
-      if (artKey !== mine) return; // la scène a changé pendant la peinture
+      if (artKey !== mine || art.querySelector(".photo")) return; // scène changée, ou illustration Gemini déjà là
       painted.className = "layer painted";
       art.insertBefore(painted, fx);
       requestAnimationFrame(() => painted.classList.add("on"));
       setTimeout(() => { if (base.isConnected) base.remove(); }, 900);
     } catch (e) { console.warn("Peinture du décor impossible, décor vectoriel conservé", e); }
+  }
+  // Illustration peinte par Gemini : posée par-dessus le décor dès qu'elle est prête
+  let shownImage = null; const asked = new Set();
+  async function showImage(key) {
+    shownImage = key;
+    const { loadImage } = await import("./illustrate.js");
+    const url = await loadImage(S.cid, key).catch(() => null);
+    if (!url || shownImage !== key) return;
+    const img = h("img", { class: "layer painted photo", alt: "", src: url });
+    await img.decode().catch(() => {});
+    if (shownImage !== key) return;
+    const fx = art.querySelector(".fx");
+    art.insertBefore(img, fx);
+    requestAnimationFrame(() => img.classList.add("on"));
+    setTimeout(() => { for (const x of [...art.children]) if (x !== img && x !== fx) x.remove(); }, 900);
   }
   function update() {
     const c = S.campaign; if (!c) return;
@@ -55,7 +70,10 @@ export function sceneCard({ big = false } = {}) {
     sub.textContent = [MOOD_ICON[sc.mood] || "", sc.location || sc.place || "", sc.title ? `· ${SETTINGS[p.setting]}, ${TIMES[p.time].toLowerCase()}${p.weather !== "clair" ? ", " + WEATHERS[p.weather].toLowerCase() : ""}` : ""].filter(Boolean).join(" ");
     // On ne redessine que si la scène change, pour ne pas relancer les animations
     const k = JSON.stringify([sc.title, sc.location, p.setting, p.time, p.weather, p.mood]);
-    if (k !== artKey) { artKey = k; drawArt(sc); }
+    if (k !== artKey) { artKey = k; shownImage = null; drawArt(sc); }
+    if (sc.image && sc.image !== shownImage) showImage(sc.image);
+    // Scène sans illustration (clé ajoutée en cours de partie, scène ancienne) : l'hôte la commande une fois
+    if (!sc.image && sc.title && PLATFORM.geminiKey && isHost() && !asked.has(k)) { asked.add(k); setTimeout(() => { const now = S.campaign?.state?.scene; if (now && !now.image && now.title === sc.title) PLATFORM.requestImage(S.cid, now, S.world); }, 8000); }
     const map = campaignMap();
     const places = c.state?.places || [];
     const mk = JSON.stringify([map?.id, S.world?.id, sc.place, places.length]);
