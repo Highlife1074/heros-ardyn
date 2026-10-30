@@ -48,7 +48,7 @@ export function renderTable(ctx) {
   const reqEl = h("div", { class: "requests" });
   const sideBody = h("div", { class: "side-body" });
   const sideTabs = h("div", { class: "tabs", role: "tablist" });
-  let sideTab = "sheet";
+  let sideTab = "sheet"; let thinkTimer;
   const mainPanel = h("div", { class: "side-body hidden", style: { overflowY: "auto", padding: "14px", flex: 1 } });
   const thinking = h("div", { class: "gm-thinking hidden" }, "Le Maître du Jeu réfléchit");
   const keyWarn = h("div", { class: "request other hidden" });
@@ -105,7 +105,10 @@ export function renderTable(ctx) {
     keyWarn.classList.toggle("hidden", !!PLATFORM.apiKey);
     keyWarn.replaceChildren(h("div", { class: "what" }, isHost() ? "Le MJ n'a pas encore de clé Claude." : "Le MJ attend que l'hôte saisisse la clé Claude."),
       isHost() ? h("button", { class: "btn small primary", onclick: () => go(`#/c/${S.cid}/host`) }, "Saisir la clé") : null);
-    thinking.classList.toggle("hidden", !(c.state?.gmBusy && Date.now() - (c.state.gmBusySince || 0) < 5 * 60e3));
+    const gmWorking = c.state?.gmBusy && Date.now() - (c.state.gmBusySince || 0) < 120e3;
+    thinking.classList.toggle("hidden", !gmWorking);
+    clearTimeout(thinkTimer);
+    if (gmWorking) thinkTimer = setTimeout(renderScene, 125e3 - (Date.now() - (c.state.gmBusySince || 0))); // se masque tout seul si le MJ a été interrompu
     const cb = c.state?.combat;
     initEl.classList.toggle("hidden", !cb?.active);
     if (cb?.active) {
@@ -153,7 +156,12 @@ export function renderTable(ctx) {
   }
 
   function renderAll() {
-    if (!S.campaign) { ctx.mount(h("main", { class: "wrap" }, h("p", {}, "Campagne introuvable ou accès refusé."), h("button", { class: "btn", onclick: () => go("#/") }, "Retour"))); return; }
+    if (!S.campaign) {
+      if (!S.campaignError) return; // pas encore arrivée
+      ctx.mount(h("main", { class: "wrap stack" }, h("h2", {}, "Campagne inaccessible"), h("p", { class: "panel small" }, S.lastError || "Campagne introuvable."),
+        h("p", {}, "Si le message parle de permission : vérifie que les règles Firestore sont publiées, et que tu as bien rejoint la campagne avec son code."),
+        h("button", { class: "btn", onclick: () => go("#/") }, "Retour"))); return;
+    }
     renderScene(); renderTabs();
     const story = tab === "story" || window.innerWidth >= 980;
     for (const el of [sceneEl, logEl, reqEl, composer]) el.classList.toggle("hidden", !story);
@@ -172,7 +180,7 @@ export function renderTable(ctx) {
     if ([...now].some((id) => !prevReq.has(id))) { navigator.vibrate?.([60, 40, 60]); }
     prevReq = now;
   });
-  ctx.addCleanup(off);
+  ctx.addCleanup(off); ctx.addCleanup(() => clearTimeout(thinkTimer));
   const onResize = () => S.campaign && renderAll();
   window.addEventListener("resize", onResize); ctx.addCleanup(() => window.removeEventListener("resize", onResize));
   if (S.campaign) { renderAll(); renderLog(); }

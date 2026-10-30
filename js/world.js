@@ -21,7 +21,7 @@ export function renderWorld(ctx) {
 
   const draw = () => {
     const w = S.world;
-    if (!w) { box.replaceChildren(h("p", { class: "muted" }, S.campaign && !S.campaign.worldId ? "Cette campagne n'a pas de monde lié." : "Chargement du monde…")); return; }
+    if (!w) { box.replaceChildren(h("p", { class: S.worldError ? "" : "muted" }, S.worldError ? `Le monde est inaccessible : ${S.lastError || ""}` : S.campaign && !S.campaign.worldId ? "Cette campagne n'a pas de monde lié." : "Chargement du monde…")); return; }
     const owner = isWorldOwner();
     const proposed = S.entries.filter((e) => e.status === "proposed").length;
     const tabs = owner ? [["entries", `Ajouts${proposed ? ` (${proposed} à valider)` : ""}`], ["setup", "Cadre"], ["versions", "Versions"]] : [["entries", "Codex"]];

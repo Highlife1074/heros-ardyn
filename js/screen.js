@@ -28,7 +28,7 @@ export function renderScreen(ctx) {
     const sc = c.state?.scene || {};
     title.textContent = sc.title || c.name; mood.textContent = `${MOOD_ICON[sc.mood] || ""} ${sc.location || ""}`;
     const shown = S.log.filter((e) => e.type !== "ooc").slice(-30);
-    narr.replaceChildren(...shown.map(renderEntry), c.state?.gmBusy ? h("div", { class: "gm-thinking" }, "Le Maître du Jeu réfléchit") : null);
+    narr.replaceChildren(...shown.map(renderEntry), c.state?.gmBusy && Date.now() - (c.state.gmBusySince || 0) < 120e3 ? h("div", { class: "gm-thinking" }, "Le Maître du Jeu réfléchit") : null);
     narr.scrollTop = narr.scrollHeight;
     strip.replaceChildren(...activeChars().map((ch) => { const d = derive(S.rules, ch); const pct = Math.max(0, (ch.hp.current / ch.hp.max) * 100);
       return h("div", { class: "pc-card" }, h("b", {}, `${ch.portrait || ""} ${ch.name}`), h("div", { class: "small muted" }, `CA ${d.ac} · ${ch.hp.current}/${ch.hp.max} PV`),

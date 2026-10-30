@@ -424,7 +424,7 @@ async function acquireLock(cid) {
   const ref = db.doc(`campaigns/${cid}`);
   return db.runTransaction(async (tx) => {
     const s = await tx.get(ref); const st = s.data()?.state || {};
-    if (st.gmBusy && Date.now() - (st.gmBusySince || 0) < 5 * 60e3) { tx.update(ref, { "state.gmRequested": true }); return false; }
+    if (st.gmBusy && Date.now() - (st.gmBusySince || 0) < 120e3) { tx.update(ref, { "state.gmRequested": true }); return false; }
     tx.update(ref, { "state.gmBusy": true, "state.gmBusySince": Date.now(), "state.gmRequested": false });
     return true;
   });
@@ -457,6 +457,7 @@ export async function runGm(cid, reason = "players", depth = 0) {
     const texts = []; const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, calls: 0 };
     let usedModel = settings.model; let fellBack = false;
     for (let i = 0; i < 14; i++) {
+      if (i) await cref.update({ "state.gmBusySince": Date.now() }); // le MJ travaille encore : on garde la main
       let resp;
       try { resp = await anthropic().messages.create({ model: usedModel, max_tokens: 2500, system, tools: TOOLS, messages }); }
       catch (e) {
@@ -519,7 +520,7 @@ async function maybeSummarize(cid, settings) {
 
 export async function askGm(uid, { campaignId }) {
   const { data: c } = await loadCampaign(campaignId, uid);
-  if (c.state?.gmBusy && Date.now() - (c.state.gmBusySince || 0) < 5 * 60e3) {
+  if (c.state?.gmBusy && Date.now() - (c.state.gmBusySince || 0) < 120e3) {
     await db.doc(`campaigns/${campaignId}`).update({ "state.gmRequested": true });
     return { queued: true };
   }

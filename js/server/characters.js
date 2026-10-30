@@ -70,7 +70,7 @@ export async function rollAbilityScores(uid, { campaignId }) {
   if (prev.exists && prev.data().used === false) return prev.data(); // un seul tirage par personnage : pas de « re-roll » caché
   const sets = Array.from({ length: 6 }, () => rollExpr("4d6kh3"));
   const values = sets.map((s) => s.total);
-  const out = { values, details: sets.map((s) => s.groups[0].values), used: false, at: Date.now() };
+  const out = { values, details: sets.map((s) => ({ dice: s.groups[0].values })) /* pas de tableaux de tableaux dans Firestore */, used: false, at: Date.now() };
   await ref.set(out);
   await addLog(campaignId, { type: "roll", uid, authorName: c.memberNames?.[uid] || "Joueur", label: "Caractéristiques (4d6, on garde les 3 meilleurs) ×6",
     roll: { expr: "6×4d6kh3", total: values.reduce((a, b) => a + b, 0), list: values, groups: sets.map((s) => s.groups[0]) } });

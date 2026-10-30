@@ -1,7 +1,7 @@
 import { initializeApp } from "../vendor/firebase/firebase-app.js";
 import { getAuth } from "../vendor/firebase/firebase-auth.js";
 import {
-  getFirestore, doc, collection, onSnapshot, query, orderBy, limit, addDoc, serverTimestamp, updateDoc, where,
+  initializeFirestore, doc, collection, onSnapshot, query, orderBy, limit, addDoc, serverTimestamp, updateDoc, where,
   getDoc, getDocs, setDoc, deleteDoc, runTransaction, increment, arrayUnion, arrayRemove, deleteField,
 } from "../vendor/firebase/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
@@ -14,7 +14,9 @@ if (!firebaseConfig.apiKey) {
 }
 export const fbApp = initializeApp(firebaseConfig);
 export const auth = getAuth(fbApp);
-export const fs = getFirestore(fbApp);
+// ignoreUndefinedProperties : un champ vide ne fait plus échouer une écriture.
+export const fs = initializeFirestore(fbApp, { ignoreUndefinedProperties: true });
+export const APP_VERSION = "2026-10-30 c";
 
 // ---------------------------------------------------------------- Plateforme pour la logique de jeu (js/server)
 // Même interface que l'ancienne version serveur : la logique n'a pas eu besoin d'être réécrite.
@@ -103,10 +105,9 @@ let ready = null;
 /** Charge les données de règles puis la logique de jeu (une fois). */
 export function loadServer() {
   if (!ready) ready = (async () => {
+    const get = async (f, kind) => { const r = await fetch(url(f), { cache: "no-cache" }); if (!r.ok) throw new Error(`Fichier ${f} introuvable (${r.status})`); return kind === "text" ? r.text() : r.json(); };
     const [rules, monsters, bible] = await Promise.all([
-      fetch(url("../data/rules.json")).then((r) => r.json()),
-      fetch(url("../data/monsters.json")).then((r) => r.json()),
-      fetch(url("../data/bible-ardyn.md")).then((r) => r.text()),
+      get("../data/rules.json"), get("../data/monsters.json"), get("../data/bible-ardyn.md", "text"),
     ]);
     Object.assign(PLATFORM, { RULES: rules, MONSTERS: monsters, BIBLE: bible });
     S.rules = rules;
@@ -114,7 +115,7 @@ export function loadServer() {
     const [campaigns, characters, dice, gm, worlds] = await Promise.all([
       import("./server/campaigns.js"), import("./server/characters.js"), import("./server/dice.js"), import("./server/gm.js"), import("./server/worlds.js")]);
     Object.assign(server, { campaigns, characters, dice, gm, worlds });
-  })();
+  })().catch((e) => { ready = null; throw e; }); // on pourra réessayer
   return ready;
 }
 
@@ -153,6 +154,8 @@ export const activeChars = () => Object.values(S.campaign?.activeCharacters || {
 
 /** Les vues s'abonnent aux changements et se redessinent. */
 export function onChange(cb) { S.listeners.add(cb); return () => S.listeners.delete(cb); }
+/** Erreur de lecture Firestore : on la garde pour l'afficher au lieu de rester bloqué en chargement. */
+function listenError(what) { return (e) => { console.error(what, e); S.lastError = `${what} : ${e.code || ""} ${e.message || e}`; emit("error"); }; }
 function emit(what) { for (const cb of [...S.listeners]) { try { cb(what); } catch (e) { console.error(e); } } }
 
 export async function loadRules() { await loadServer(); return S.rules; }
@@ -160,20 +163,20 @@ export async function loadRules() { await loadServer(); return S.rules; }
 export function openCampaign(cid) {
   if (S.cid === cid) return;
   closeCampaign();
-  S.cid = cid;
+  S.cid = cid; S.campaignError = false; S.lastError = null;
   S.subs.push(onSnapshot(doc(fs, "campaigns", cid), (snap) => { S.campaign = snap.exists() ? { id: snap.id, ...snap.data() } : null; watchWorld(S.campaign?.worldId); emit("campaign"); },
-    (e) => { console.error(e); S.campaign = null; emit("campaign"); }));
+    (e) => { listenError("Lecture de la campagne")(e); S.campaign = null; S.campaignError = true; emit("campaign"); }));
   S.subs.push(onSnapshot(doc(fs, "campaigns", cid, "secret", "config"), (snap) => { PLATFORM.apiKey = snap.exists() ? snap.data().apiKey || "" : ""; emit("key"); }, () => {}));
   S.subs.push(onSnapshot(collection(fs, "campaigns", cid, "characters"), (snap) => {
     S.chars = Object.fromEntries(snap.docs.map((d) => [d.id, { id: d.id, ...d.data() }])); emit("chars");
-  }));
+  }, listenError("Lecture des personnages")));
   let firstLog = true;
   S.subs.push(onSnapshot(query(collection(fs, "campaigns", cid, "log"), orderBy("tms", "desc"), limit(160)), (snap) => {
     const fresh = firstLog ? [] : snap.docChanges().filter((c) => c.type === "added" && !snap.metadata.hasPendingWrites).map((c) => ({ id: c.doc.id, ...c.doc.data() }));
     firstLog = false;
     S.log = snap.docs.map((d) => ({ id: d.id, ...d.data() })).reverse();
     emit({ type: "log", fresh });
-  }));
+  }, listenError("Lecture du journal")));
 }
 export function closeCampaign() {
   S.subs.forEach((u) => u()); S.subs = []; S.cid = null; S.campaign = null; S.chars = {}; S.log = [];
@@ -193,7 +196,7 @@ function watchWorld(wid) {
       const q = owner ? collection(fs, "worlds", wid, "entries") : query(collection(fs, "worlds", wid, "entries"), where("revealed", "==", true));
       S.worldSubs.push(onSnapshot(q, (s2) => { S.entries = s2.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.at || 0) - (a.at || 0)); emit("world"); }, (e) => console.warn(e)));
     }
-  }, (e) => console.warn(e)));
+  }, (e) => { listenError("Lecture du monde")(e); S.worldError = true; emit("world"); }));
 }
 export const isWorldOwner = () => S.world?.ownerUid === S.user?.uid;
 export function watchMyWorlds(cb) {
@@ -212,7 +215,8 @@ export async function updateMyCharacter(id, patch) { await updateDoc(doc(fs, "ca
 
 export function watchMyCampaigns(cb) {
   return onSnapshot(query(collection(fs, "campaigns"), where("members", "array-contains", S.user.uid)), (snap) =>
-    cb(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))));
+    cb(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))),
+    (e) => { listenError("Liste des campagnes")(e); cb(null, e); });
 }
 
 export function go(hash) { if (location.hash !== hash) location.hash = hash; else window.dispatchEvent(new HashChangeEvent("hashchange")); }

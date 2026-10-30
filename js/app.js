@@ -1,5 +1,5 @@
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, signOut, sendPasswordResetEmail } from "../vendor/firebase/firebase-auth.js";
-import { auth, S, fn, go, openCampaign, closeCampaign, watchMyCampaigns, watchMyWorlds, loadRules, onChange } from "./core.js";
+import { auth, S, fn, go, APP_VERSION, openCampaign, closeCampaign, watchMyCampaigns, watchMyWorlds, loadRules, onChange } from "./core.js";
 import { h, $, toast, busy, errMsg, modal, timeAgo, topbar, toggleTheme } from "./ui.js";
 import { renderTable } from "./table.js";
 import { renderCreate } from "./create.js";
@@ -57,7 +57,8 @@ function renderAuth() {
 function renderHome() {
   closeCampaign();
   const list = h("ul", { class: "list" }, h("li", { class: "muted" }, "Chargement…"));
-  const unsub = watchMyCampaigns((camps) => {
+  const unsub = watchMyCampaigns((camps, err) => {
+    if (!camps) { list.replaceChildren(h("li", { style: { color: "var(--blood)" } }, `Lecture impossible : ${errMsg(err)}. Vérifie que les règles Firestore sont publiées.`)); return; }
     list.replaceChildren(...(camps.length ? camps.map((c) => h("li", {},
       h("div", { class: "camp-item", role: "button", tabindex: 0, onclick: () => go(`#/c/${c.id}`), onkeydown: (e) => e.key === "Enter" && go(`#/c/${c.id}`) },
         h("div", { class: "seal" }, c.setting === "ardyn" ? "🐉" : "🗺️"),
@@ -77,7 +78,8 @@ function renderHome() {
     h("main", { class: "wrap stack" },
       h("h2", {}, `Bonjour ${S.displayName || ""} !`),
       h("div", { class: "row" }, createBtn, joinBtn),
-      h("section", { class: "panel" }, h("h3", {}, "Mes campagnes"), list)));
+      h("section", { class: "panel" }, h("h3", {}, "Mes campagnes"), list),
+      h("p", { class: "small muted" }, `Version ${APP_VERSION}`)));
 }
 
 async function createCampaignDialog() {
@@ -116,13 +118,27 @@ async function joinDialog() {
 }
 
 // ---------------------------------------------------------------- Routeur
+export function showError(title, e, retry) {
+  const msg = typeof e === "string" ? e : errMsg(e);
+  const perm = /permission|insufficient/i.test(msg);
+  mount(topbar(h("button", { class: "icon-btn", "aria-label": "Retour", onclick: () => go("#/") }, "‹"), h("span", { class: "title" }, "Héros d'Ardyn")),
+    h("main", { class: "wrap stack" }, h("h2", {}, title), h("p", { class: "panel small", style: { borderColor: "var(--blood)" } }, msg),
+      perm ? h("p", {}, "Firebase refuse l'accès : vérifie que les règles Firestore ont bien été publiées (Console Firebase → Firestore Database → Règles).") : null,
+      h("div", { class: "row" }, retry ? h("button", { class: "btn primary", onclick: () => location.reload() }, "Réessayer") : null, h("button", { class: "btn", onclick: () => go("#/") }, "Mes campagnes"))));
+}
+
 async function route() {
   if (!S.user) return renderAuth();
   const parts = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean);
   if (parts[0] !== "c" || !parts[1]) return renderHome();
   const cid = parts[1]; const sub = parts[2] || "table";
-  await loadRules();
+  mount(h("main", { class: "wrap" }, h("p", { class: "muted" }, "Ouverture de la campagne…")));
+  try { await loadRules(); }
+  catch (e) { return showError("Impossible de charger les règles du jeu", e, true); }
   openCampaign(cid);
+  // Garde-fou : si la campagne n'arrive pas, on explique au lieu de rester bloqué.
+  const t = setTimeout(() => { if (!S.campaign && S.cid === cid) showError("La campagne ne répond pas", S.lastError || "Aucune réponse de Firebase après 12 secondes.", true); }, 12000);
+  addCleanup(() => clearTimeout(t));
   const ctx = { cid, sub, arg: parts[3], mount, addCleanup, onChange };
   if (sub === "create") return renderCreate(ctx);
   if (sub === "sheet") return renderSheetPage(ctx);
