@@ -1,4 +1,5 @@
 // Test de bout en bout de la logique serveur (faux Firestore + MJ scripté). Lancer : npm test
+const txt = (c) => typeof c === "string" ? c : c.map((b) => b.text || "").join("");
 import assert from "node:assert/strict";
 import * as F from "./fakefs.js";
 import { readFileSync } from "node:fs";
@@ -84,7 +85,7 @@ await t("le MJ ouvre l'aventure et lance un combat", async () => {
   assert.equal(c.state.pendingRolls.length, 2); assert.ok(!("dc" in c.state.pendingRolls[0]));
   assert.equal(c.state.gmBusy, false);
   const sys = calls[0].system.map((b) => b.text).join(""); assert.match(sys, /Ardyn/);
-  assert.match(calls[0].messages[0].content, /Thrain/);
+  assert.match(txt(calls[0].messages[0].content), /Thrain/);
   const logs = (await F.db.collection(`campaigns/${cid}/log`).where("tms", ">", 0).get()).docs.map((d) => d.data());
   assert.ok(logs.some((l) => l.type === "gm" && /brume/.test(l.text)));
 });
@@ -119,14 +120,14 @@ await t("tour de combat : attaque de monstre, dégâts, test demandé avec DD se
   assert.equal(F.raw(`campaigns/${cid}/secret/gm`).pending[c2.state.pendingRolls[0].id].dc, 13);
   const r = await dice.roll(K, { campaignId: cid, characterId: wizId, requestId: c2.state.pendingRolls[0].id, advantage: "adv" });
   assert.equal(r.adv, "normal", "le joueur ne peut pas s'offrir l'avantage sur un jet demandé");
-  const last = calls[calls.length - 1].messages[0].content; assert.match(last, /Combat en cours/);
+  const last = txt(calls[calls.length - 1].messages[0].content); assert.match(last, /Combat en cours/);
 });
 
 await t("le contexte suivant donne au MJ le résultat et la réussite", async () => {
   script.push(resp([tool("end_combat", { outcome: "victoire" }), tool("award_xp", { amount_each: 300, reason: "Gobelins vaincus" }), tool("grant_rest", { type: "short" })]));
   script.push(resp([{ type: "text", text: "Victoire !" }], "end_turn"));
   await gm.runGm(cid, "rolls");
-  const ctx = calls[calls.length - 2].messages[0].content;
+  const ctx = txt(calls[calls.length - 2].messages[0].content);
   assert.match(ctx, /Reconnaître le symbole : \d+.*DD 13 → (RÉUSSITE|ÉCHEC)/);
   assert.equal(F.raw(`campaigns/${cid}`).state.combat.active, false);
   assert.equal(F.raw(`campaigns/${cid}/characters/${fighterId}`).xp, 300);

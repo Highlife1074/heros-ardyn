@@ -94,7 +94,8 @@ export function renderHost(ctx) {
     live.usage.replaceChildren(h("h3", {}, "Consommation de l'IA"),
       c.state?.modelWarning ? h("p", { class: "small", style: { color: "var(--blood)" } }, "⚠️ " + c.state.modelWarning) : null,
       h("p", { class: "small" }, `${fmt(u.calls)} appels · ${fmt(u.input)} jetons lus · ${fmt(u.cacheRead)} jetons relus depuis le cache (facturés environ 10 %) · ${fmt(u.output)} jetons écrits.`),
-      h("p", { class: "small muted" }, "Le coût réel apparaît sur console.anthropic.com (Usage). Pour dépenser moins : récits courts ou modèle Haiku."));
+      h("p", { class: "small" }, `💰 Dépense estimée de cette campagne : environ ${(u.costUsd || 0).toFixed(2)} $ (estimation depuis le début du suivi).`),
+      h("p", { class: "small muted" }, "Le coût réel et le solde sont sur console.anthropic.com (Usage / Plans & Billing). Pour dépenser moins : récits courts ou modèle Haiku."));
   }
   ctx.addCleanup(ctx.onChange((w) => { if (w?.type !== "log") draw(); }));
   draw();

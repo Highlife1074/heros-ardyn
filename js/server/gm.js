@@ -115,10 +115,28 @@ function fmtLog(e) {
   return `[${t}] ${e.text || ""}`;
 }
 
+/** Marque la fin de la conversation comme « à mettre en cache » : à chaque aller-retour d'outils, tout ce qui précède est relu à ~10 % du prix. */
+function cacheTail(messages) {
+  const out = messages.map((m) => ({ ...m }));
+  const last = out[out.length - 1];
+  const blocks = typeof last.content === "string" ? [{ type: "text", text: last.content }] : last.content.map((b) => ({ ...b }));
+  blocks[blocks.length - 1] = { ...blocks[blocks.length - 1], cache_control: { type: "ephemeral" } };
+  last.content = blocks;
+  return out;
+}
+
+// Tarifs approximatifs en $ par million de jetons (estimation affichée à l'hôte ; le coût réel est sur console.anthropic.com)
+function rateFor(model) {
+  const m = String(model || "").toLowerCase();
+  if (m.includes("haiku")) return { in: 1, out: 5 };
+  if (m.includes("opus")) return { in: 5, out: 25 };
+  return { in: 3, out: 15 };
+}
+
 async function buildContext(cid, c, chars, secret, reason) {
   const s = { ...DEFAULT_SETTINGS, ...(c.settings || {}) };
   const st = c.state || {};
-  const logSnap = await db.collection(`campaigns/${cid}/log`).where("tms", ">", st.summaryUpTo || 0).orderBy("tms", "desc").limit(45).get();
+  const logSnap = await db.collection(`campaigns/${cid}/log`).where("tms", ">", st.summaryUpTo || 0).orderBy("tms", "desc").limit(28).get();
   const log = logSnap.docs.map((d) => d.data()).reverse().filter((e) => !e.hiddenFromGm);
   const partyLevel = chars.length ? Math.round(chars.reduce((a, x) => a + x.level, 0) / chars.length) : 1;
   const parts = [];
@@ -469,10 +487,10 @@ export async function runGm(cid, reason = "players", depth = 0) {
     const messages = [{ role: "user", content: userText }];
     const texts = []; const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, calls: 0 };
     let usedModel = settings.model; let fellBack = false;
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < 9; i++) {
       if (i) await cref.update({ "state.gmBusySince": Date.now() }); // le MJ travaille encore : on garde la main
       let resp;
-      try { resp = await anthropic().messages.create({ model: usedModel, max_tokens: 2500, system, tools: TOOLS, messages }); }
+      try { resp = await anthropic().messages.create({ model: usedModel, max_tokens: 2000, system, tools: TOOLS, messages: cacheTail(messages) }); }
       catch (e) {
         // Modèle principal pas (encore) activé dans Vertex AI : on joue avec le modèle de secours plutôt que de bloquer la partie.
         if (i === 0 && [400, 403, 404].includes(e.status) && usedModel !== settings.helperModel) {
@@ -483,6 +501,7 @@ export async function runGm(cid, reason = "players", depth = 0) {
       }
       usage.calls++; usage.input += resp.usage?.input_tokens || 0; usage.output += resp.usage?.output_tokens || 0;
       usage.cacheRead += resp.usage?.cache_read_input_tokens || 0; usage.cacheWrite += resp.usage?.cache_creation_input_tokens || 0;
+      { const r = rateFor(usedModel), u = resp.usage || {}; usage.cost = (usage.cost || 0) + ((u.input_tokens || 0) * r.in + (u.output_tokens || 0) * r.out + (u.cache_read_input_tokens || 0) * r.in * 0.1 + (u.cache_creation_input_tokens || 0) * r.in * 1.25) / 1e6; }
       for (const b of resp.content) if (b.type === "text" && b.text.trim()) texts.push(b.text.trim());
       if (resp.stop_reason !== "tool_use") break;
       messages.push({ role: "assistant", content: resp.content });
@@ -509,7 +528,7 @@ export async function runGm(cid, reason = "players", depth = 0) {
       "state.lastGmAt": started,
       "usage.input": FieldValue.increment(usage.input), "usage.output": FieldValue.increment(usage.output),
       "usage.cacheRead": FieldValue.increment(usage.cacheRead), "usage.cacheWrite": FieldValue.increment(usage.cacheWrite),
-      "usage.calls": FieldValue.increment(usage.calls), [`usage.byModel.${usedModel.replace(/\./g, "_")}`]: FieldValue.increment(usage.input + usage.output),
+      "usage.calls": FieldValue.increment(usage.calls), "usage.costUsd": FieldValue.increment(usage.cost || 0), [`usage.byModel.${usedModel.replace(/\./g, "_")}`]: FieldValue.increment(usage.input + usage.output),
     });
     try { await maybeSummarize(cid, settings); } catch (e) { logger.warn("Résumé non mis à jour", e); }
     return { ok: true };
@@ -530,8 +549,8 @@ async function maybeSummarize(cid, settings) {
   const st = (await cref.get()).data()?.state || {};
   const since = st.summaryUpTo || 0;
   const snap = await db.collection(`campaigns/${cid}/log`).where("tms", ">", since).orderBy("tms", "asc").get();
-  if (snap.size < 90) return;
-  const old = snap.docs.slice(0, snap.size - 40).map((d) => d.data());
+  if (snap.size < 50) return;
+  const old = snap.docs.slice(0, snap.size - 24).map((d) => d.data());
   const resp = await helperCall(settings, { max_tokens: 1200, system: SUMMARY_PROMPT,
     messages: [{ role: "user", content: `Résumé actuel :\n${st.summary || "(aucun)"}\n\nNouveaux événements :\n${old.filter((e) => e.type !== "roll").map(fmtLog).join("\n")}` }] });
   const summary = resp.content.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
