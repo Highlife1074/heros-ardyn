@@ -1,4 +1,3 @@
-import { DEFAULT_SETTINGS } from "./server/common.js";
 import { S, fn, go, isHost, activeChars, PLATFORM } from "./core.js";
 import { h, toast, busy, errMsg, confirmBox, topbar, modal } from "./ui.js";
 
@@ -17,7 +16,7 @@ export function renderHost(ctx) {
     if (!isHost()) { box.replaceChildren(h("p", {}, "Réservé à l'hôte de la campagne.")); return; }
     if (drawn) { refreshLive(); return; }
     drawn = true;
-    const c = S.campaign; const s = { ...DEFAULT_SETTINGS, ...(c.settings || {}) };
+    const c = S.campaign; const s = { economy: true, ...(c.settings || {}) };
     const sel = (key, opts) => { const el = h("select", { name: key }, ...opts.map(([v, l]) => h("option", { value: v, selected: String(s[key]) === String(v) }, l))); return el; };
     const f = {
       name: h("input", { type: "text", value: c.name, maxlength: 80 }),
