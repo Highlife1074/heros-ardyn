@@ -40,6 +40,7 @@ export const DEFAULT_SETTINGS = {
   dice3d: true,
   tts: false,
   houseRules: "",
+  externalGm: false,       // MJ externe : Claude (abonnement) joue via tools/mj.mjs, aucun appel API
   economy: true,           // mode économique : modèle léger, historique court, récits courts
   turnMode: "round",
   images: true,             // illustrations des scènes (Gemini via Firebase AI Logic)

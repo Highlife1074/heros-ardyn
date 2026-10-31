@@ -30,3 +30,19 @@ La clé Claude est stockée dans la campagne et lisible par les membres de la ta
 
 ## Licences
 Règles : SRD 5.2 (CC-BY-4.0, données 5e-bits/5e-database). Dés 3D : @3d-dice/dice-box-threejs (MIT). Univers d'Ardyn : © son auteur.
+
+
+## MJ externe : jouer avec l'abonnement Claude (sans crédit API)
+
+Dans ⚙️ de la campagne, règle **MJ externe** sur « Oui ». L'app n'appelle plus l'API : quand un joueur appuie sur « Au MJ », elle affiche
+« Le Maître du Jeu arrive… ». Claude Code (sur ton ordinateur, avec ton abonnement) joue alors le MJ avec `tools/mj.mjs`.
+
+Installation (une seule fois) :
+
+    git clone https://github.com/Highlife1074/heros-ardyn.git
+    cd heros-ardyn/tools && npm install && cd ..
+    export MJ_EMAIL="ton-email-de-l-app"
+    export MJ_PASSWORD="ton-mot-de-passe-de-l-app"
+
+Lancer une séance : dans le dossier `heros-ardyn`, ouvre Claude Code (`claude`) et écris :
+« Lis tools/CLAUDE.md et joue le MJ de ma campagne ».

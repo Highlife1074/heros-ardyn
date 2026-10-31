@@ -70,8 +70,8 @@ export function renderTable(ctx) {
   input.addEventListener("input", () => { input.style.height = "auto"; input.style.height = Math.min(140, input.scrollHeight) + "px"; });
   input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && window.innerWidth > 700) { e.preventDefault(); gmBtn.click(); } });
   const callGm = async () => {
-    if (!PLATFORM.apiKey) { toast(isHost() ? "Saisis d'abord la clé Claude dans ⚙️." : "L'hôte doit d'abord saisir la clé Claude.", "error"); return; }
-    const r = await fn("askGm", { campaignId: S.cid }); if (r.queued) toast("Le MJ termine une réponse, il enchaîne juste après.");
+    if (!PLATFORM.apiKey && !S.campaign?.settings?.externalGm) { toast(isHost() ? "Saisis d'abord la clé Claude dans ⚙️." : "L'hôte doit d'abord saisir la clé Claude.", "error"); return; }
+    const r = await fn("askGm", { campaignId: S.cid }); if (r.queued) toast("Le MJ termine une réponse, il enchaîne juste après."); if (r.external) toast("C'est noté : le MJ (Claude) va répondre dès que l'hôte le lance.");
   };
   const clearInput = () => { input.value = ""; input.style.height = "auto"; };
   const send = async (askGm) => {
@@ -137,11 +137,13 @@ export function renderTable(ctx) {
     errBox.classList.toggle("hidden", !S.lastError && !imgWarn);
     if (!S.lastError && imgWarn) errBox.replaceChildren(h("div", { class: "what small" }, "🖼️ " + imgWarn));
     if (S.lastError) errBox.replaceChildren(h("div", { class: "what small" }, "⚠️ " + S.lastError + (/permission|insufficient/i.test(S.lastError) ? " — vérifie que les règles Firestore sont publiées." : "")));
-    keyWarn.classList.toggle("hidden", !!PLATFORM.apiKey);
+    keyWarn.classList.toggle("hidden", !!PLATFORM.apiKey || !!c.settings?.externalGm);
     keyWarn.replaceChildren(h("div", { class: "what" }, isHost() ? "Le MJ n'a pas encore de clé Claude." : "Le MJ attend que l'hôte saisisse la clé Claude."),
       isHost() ? h("button", { class: "btn small primary", onclick: () => go(`#/c/${S.cid}/host`) }, "Saisir la clé") : null);
     const gmWorking = c.state?.gmBusy && Date.now() - (c.state.gmBusySince || 0) < 120e3;
-    thinking.classList.toggle("hidden", !gmWorking);
+    const gmWaiting = !!c.settings?.externalGm && !!c.state?.gmWaiting;
+    thinking.textContent = gmWaiting ? "Le Maître du Jeu arrive… (en attente de Claude)" : "Le Maître du Jeu réfléchit";
+    thinking.classList.toggle("hidden", !gmWorking && !gmWaiting);
     clearTimeout(thinkTimer);
     if (gmWorking) thinkTimer = setTimeout(renderScene, 125e3 - (Date.now() - (c.state.gmBusySince || 0))); // se masque tout seul si le MJ a été interrompu
     const cb = c.state?.combat;

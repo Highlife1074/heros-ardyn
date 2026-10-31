@@ -243,4 +243,31 @@ await t("tour de table : ordre tournant, tour imposé, MJ appelé quand tout le 
   assert.equal(F.raw(`campaigns/${cid}`).state.round.idx, 2);
 });
 
+await t("MJ externe : l'app n'appelle pas l'API, Claude joue via l'outil en ligne de commande", async () => {
+  await F.db.doc(`campaigns/${cid}`).update({ "settings.externalGm": true });
+  const before = calls.length;
+  const r = await gm.runGm(cid, "players");
+  assert.equal(r.external, true); assert.equal(calls.length, before, "aucun appel à l'API");
+  assert.ok(F.raw(`campaigns/${cid}`).state.gmWaiting, "l'attente du MJ est signalée aux joueurs");
+  const logs = [];
+  const real = console.log; console.log = (...a) => logs.push(a.join(" "));
+  const lib = await import("../tools/mj-lib.mjs");
+  try {
+    await lib.run(["status", cid]); await lib.run(["context", cid]); await lib.run(["tools"]);
+    const hero = F.dump(`campaigns/${cid}/characters/`).map(([p, d]) => ({ id: p.split("/").pop(), ...d }))[0];
+    await lib.run(["tool", cid, "request_roll", JSON.stringify({ character_id: hero.id, kind: "skill", skill: "perception", label: "Repérer l'embuscade", dc: 13 })]);
+    await lib.run(["tool", cid, "remember", JSON.stringify({ fact: "Le pont est piégé." })]);
+    await lib.run(["say", cid, "Le vent se lève sur la route de Brumeval."]);
+  } finally { console.log = real; }
+  const all = logs.join("\n");
+  assert.match(all, /CONSIGNES PERMANENTES/); assert.match(all, /SITUATION ACTUELLE/); assert.match(all, /request_roll\(/); assert.match(all, /Récit publié/);
+  assert.match(all, /Thrain|Lysandre/, "les fiches des héros sont dans le contexte");
+  const st = F.raw(`campaigns/${cid}`).state;
+  assert.equal(st.gmWaiting, undefined, "l'attente est levée après le récit");
+  assert.equal(st.pendingRolls.length >= 1, true, "le jet demandé apparaît chez le joueur");
+  assert.ok(F.dump(`campaigns/${cid}/log/`).some(([, d]) => d.type === "gm" && /Brumeval/.test(d.text)));
+  assert.ok((F.raw(`campaigns/${cid}/secret/gm`).memory || []).includes("Le pont est piégé."));
+  await F.db.doc(`campaigns/${cid}`).update({ "settings.externalGm": false });
+});
+
 console.log(`\n${ok} tests réussis. Appels modèle simulés : ${calls.length}`);

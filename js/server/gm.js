@@ -461,29 +461,85 @@ async function acquireLock(cid) {
   });
 }
 
+/** Rassemble tout ce qu'il faut pour faire jouer le MJ : campagne, héros, secrets, monde, contexte. */
+async function prepare(cid, reason = "players", withText = true) {
+  const cref = db.doc(`campaigns/${cid}`);
+  const c = (await cref.get()).data();
+  const settings = { ...DEFAULT_SETTINGS, ...(c.settings || {}) };
+  const charSnap = await db.collection(`campaigns/${cid}/characters`).get();
+  const active = new Set(Object.values(c.activeCharacters || {}));
+  const chars = charSnap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((x) => active.has(x.id));
+  const secret = (await db.doc(`campaigns/${cid}/secret/gm`).get()).data() || {};
+  const worldDoc = await loadWorld(c.worldId);
+  const ctx = { cid, c, chars, secret, settings, world: worldDoc, combat: c.state?.combat || { active: false }, pendingPublic: [] };
+  const userText = withText ? await buildContext(cid, c, chars, secret, reason) : "";
+  const system = [{ type: "text", text: GM_CORE }];
+  if (worldDoc) {
+    system.push({ type: "text", text: `${setupText(worldDoc.setup)}\n\n# BIBLE DU MONDE « ${worldDoc.name} » — version ${worldDoc.version}\n${worldDoc.baseText}`, cache_control: { type: "ephemeral" } });
+    const adds = await additionsText(worldDoc);
+    if (adds) system.push({ type: "text", text: adds, cache_control: { type: "ephemeral" } });
+  } else {
+    const world = c.setting === "ardyn" ? BIBLE_ARDYN : c.setting === "custom" && c.bible ? `# MONDE DE LA CAMPAGNE\n${c.bible}` : GENERIC_WORLD;
+    system.push({ type: "text", text: setupText() + "\n\n" + world, cache_control: { type: "ephemeral" } });
+  }
+  return { c, settings, chars, secret, worldDoc, ctx, userText, system };
+}
+
+/** Tour de table : après chaque réponse du MJ, un nouveau tour s'ouvre (sauf combat ou jets de dés en attente). */
+async function openNextRound(cid, settings) {
+  const cref = db.doc(`campaigns/${cid}`);
+  if (settings.turnMode !== "round") return;
+  const now = (await cref.get()).data();
+  const freshChars = (await db.collection(`campaigns/${cid}/characters`).get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+  const round = now.state?.combat?.active || (now.state?.pendingRolls || []).length ? null : newRound(now, freshChars);
+  await cref.update({ "state.round": round ? { ...round, n: (now.state?.round?.n || 0) + 1 } : { ...(now.state?.round || {}), idx: 999 } });
+}
+
+// ---------------------------------------------------------------- MJ externe (outil en ligne de commande tools/mj.mjs)
+/** Tout ce que Claude doit lire pour jouer le MJ maintenant. */
+export async function externalContext(cid, reason = "players") {
+  const p = await prepare(cid, reason, true);
+  await db.doc(`campaigns/${cid}`).update({ "state.externalCtxAt": Date.now() });
+  return { system: p.system.map((b) => b.text).join("\n\n"), context: p.userText, model: p.settings.model };
+}
+export function externalToolList() { return TOOLS.map((t) => ({ name: t.name, description: t.description, input_schema: t.input_schema })); }
+/** Exécute un outil du MJ (jets, PV, scène, etc.) exactement comme si le modèle l'avait appelé. */
+export async function externalTool(cid, name, input) {
+  const p = await prepare(cid, "players", false);
+  return execTool(p.ctx, name, input || {});
+}
+/** Publie le récit du MJ, ouvre le tour suivant et lève l'attente. */
+export async function externalSay(cid, text) {
+  const cref = db.doc(`campaigns/${cid}`);
+  const c = (await cref.get()).data();
+  const settings = { ...DEFAULT_SETTINGS, ...(c.settings || {}) };
+  const narration = str(text, 6000).trim();
+  if (!narration) throw new HttpsError("invalid-argument", "Récit vide.");
+  await addLog(cid, { type: "gm", authorName: "Maître du Jeu", portrait: "🐉", text: narration, model: "claude (abonnement)" });
+  await openNextRound(cid, settings);
+  await cref.update({ "state.lastGmAt": c.state?.externalCtxAt || Date.now(), "state.gmWaiting": FieldValue.delete() });
+  return { ok: true };
+}
+/** Etat résumé : qui attend le MJ, jets en attente, tour en cours. */
+export async function externalStatus(cid) {
+  const c = (await db.doc(`campaigns/${cid}`).get()).data();
+  if (!c) throw new HttpsError("not-found", "Campagne introuvable.");
+  const st = c.state || {};
+  return { name: c.name, external: !!c.settings?.externalGm, waiting: st.gmWaiting || null, pendingRolls: (st.pendingRolls || []).map((p) => `${p.characterName} : ${p.label}`),
+    scene: st.scene?.title || null, combat: !!st.combat?.active, round: st.round ? { n: st.round.n, idx: st.round.idx, of: (st.round.order || []).length } : null };
+}
+
 export async function runGm(cid, reason = "players", depth = 0) {
+  {
+    // MJ externe : Claude (abonnement) joue le MJ via l'outil tools/mj.mjs ; l'app n'appelle pas l'API, elle signale qu'on attend le MJ.
+    const cur = (await db.doc(`campaigns/${cid}`).get()).data();
+    if (cur?.settings?.externalGm) { await db.doc(`campaigns/${cid}`).update({ "state.gmWaiting": { at: Date.now(), reason } }); return { external: true }; }
+  }
   if (!(await acquireLock(cid))) return { busy: true };
   const cref = db.doc(`campaigns/${cid}`);
   const started = Date.now();
   try {
-    const c = (await cref.get()).data();
-    const settings = { ...DEFAULT_SETTINGS, ...(c.settings || {}) };
-    const charSnap = await db.collection(`campaigns/${cid}/characters`).get();
-    const active = new Set(Object.values(c.activeCharacters || {}));
-    const chars = charSnap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((x) => active.has(x.id));
-    const secret = (await db.doc(`campaigns/${cid}/secret/gm`).get()).data() || {};
-    const worldDoc = await loadWorld(c.worldId);
-    const ctx = { cid, c, chars, secret, settings, world: worldDoc, combat: c.state?.combat || { active: false }, pendingPublic: [] };
-    const userText = await buildContext(cid, c, chars, secret, reason);
-    const system = [{ type: "text", text: GM_CORE }];
-    if (worldDoc) {
-      system.push({ type: "text", text: `${setupText(worldDoc.setup)}\n\n# BIBLE DU MONDE « ${worldDoc.name} » — version ${worldDoc.version}\n${worldDoc.baseText}`, cache_control: { type: "ephemeral" } });
-      const adds = await additionsText(worldDoc);
-      if (adds) system.push({ type: "text", text: adds, cache_control: { type: "ephemeral" } });
-    } else {
-      const world = c.setting === "ardyn" ? BIBLE_ARDYN : c.setting === "custom" && c.bible ? `# MONDE DE LA CAMPAGNE\n${c.bible}` : GENERIC_WORLD;
-      system.push({ type: "text", text: setupText() + "\n\n" + world, cache_control: { type: "ephemeral" } });
-    }
+    const { c, settings, ctx, userText, system } = await prepare(cid, reason);
     const messages = [{ role: "user", content: userText }];
     const texts = []; const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, calls: 0 };
     let usedModel = settings.economy ? settings.helperModel : settings.model; let fellBack = false;
@@ -516,13 +572,7 @@ export async function runGm(cid, reason = "players", depth = 0) {
     }
     const narration = texts.join("\n\n").trim();
     if (narration) await addLog(cid, { type: "gm", authorName: "Maître du Jeu", portrait: "🐉", text: narration, model: usedModel });
-    // Tour de table : après chaque réponse du MJ, un nouveau tour s'ouvre (sauf combat ou jets de dés en attente).
-    if (settings.turnMode === "round") {
-      const now = (await cref.get()).data();
-      const freshChars = (await db.collection(`campaigns/${cid}/characters`).get()).docs.map((d) => ({ id: d.id, ...d.data() }));
-      const round = now.state?.combat?.active || (now.state?.pendingRolls || []).length ? null : newRound(now, freshChars);
-      await cref.update({ "state.round": round ? { ...round, n: (now.state?.round?.n || 0) + 1 } : { ...(now.state?.round || {}), idx: 999 } });
-    }
+    await openNextRound(cid, settings);
     if (fellBack) await cref.update({ "state.modelWarning": `${settings.model} n'est pas accessible avec cette clé : le MJ utilise ${usedModel} en attendant.` });
     else if (c.state?.modelWarning) await cref.update({ "state.modelWarning": FieldValue.delete() });
     await cref.update({
@@ -569,6 +619,7 @@ export async function askGm(uid, { campaignId }) {
   const r = await runGm(campaignId, "players");
   if (r?.error) throw new HttpsError("internal", r.error);
   if (r?.busy) return { queued: true };
+  if (r?.external) return { external: true };
   return { ok: true };
 }
 
