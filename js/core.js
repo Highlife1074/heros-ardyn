@@ -15,8 +15,8 @@ if (!firebaseConfig.apiKey) {
 export const fbApp = initializeApp(firebaseConfig);
 export const auth = getAuth(fbApp);
 // ignoreUndefinedProperties : un champ vide ne fait plus échouer une écriture.
-export const fs = initializeFirestore(fbApp, { ignoreUndefinedProperties: true, experimentalAutoDetectLongPolling: true });
-export const APP_VERSION = "2026-10-31 o";
+export const fs = initializeFirestore(fbApp, { ignoreUndefinedProperties: true, experimentalForceLongPolling: true });
+export const APP_VERSION = "2026-10-31 p";
 
 // ---------------------------------------------------------------- Plateforme pour la logique de jeu (js/server)
 // Même interface que l'ancienne version serveur : la logique n'a pas eu besoin d'être réécrite.
@@ -226,9 +226,17 @@ export async function postMessage(text, ooc = false) {
 export async function updateMyCharacter(id, patch) { await updateDoc(doc(fs, "campaigns", S.cid, "characters", id), patch); }
 
 export function watchMyCampaigns(cb) {
-  return onSnapshot(query(collection(fs, "campaigns"), where("members", "array-contains", S.user.uid)), (snap) =>
-    cb(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))),
-    (e) => { listenError("Liste des campagnes")(e); cb(null, e); });
+  const q = query(collection(fs, "campaigns"), where("members", "array-contains", S.user.uid));
+  const toList = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  let got = false;
+  const unsub = onSnapshot(q, (snap) => { got = true; cb(toList(snap)); }, (e) => { got = true; listenError("Liste des campagnes")(e); cb(null, e); });
+  // Si la connexion temps réel ne répond pas, on tente une lecture simple, et on dit clairement ce qui se passe.
+  const t = setTimeout(async () => {
+    if (got) return;
+    try { const snap = await getDocs(q); if (!got) { got = true; cb(toList(snap)); } }
+    catch (e) { if (!got) { got = true; cb(null, new Error(`Firebase ne répond pas (${navigator.onLine ? "réseau OK" : "hors ligne"}) : ${e.code || e.message}`)); } }
+  }, 8000);
+  return () => { clearTimeout(t); unsub(); };
 }
 
 export function go(hash) { if (location.hash !== hash) location.hash = hash; else window.dispatchEvent(new HashChangeEvent("hashchange")); }
