@@ -11,7 +11,11 @@ import { warmDice } from "./dice3d.js";
 
 const app = $("#app");
 let cleanup = [];
-const mount = (...nodes) => { cleanup.forEach((f) => f()); cleanup = []; app.replaceChildren(...nodes); window.scrollTo(0, 0); };
+// Les nettoyages (écoutes Firestore, minuteurs…) s'exécutent quand on change de page (route),
+// pas à chaque mount : sinon un écran qui s'abonne avant d'afficher coupait sa propre écoute
+// et restait bloqué sur « Chargement… ».
+const runCleanup = () => { const fs = cleanup; cleanup = []; fs.forEach((f) => { try { f(); } catch (e) { console.error(e); } }); };
+const mount = (...nodes) => { app.replaceChildren(...nodes); window.scrollTo(0, 0); };
 export const addCleanup = (f) => cleanup.push(f);
 
 try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
@@ -130,6 +134,7 @@ export function showError(title, e, retry) {
 }
 
 async function route() {
+  runCleanup();
   if (!S.user) return renderAuth();
   const parts = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean);
   if (parts[0] !== "c" || !parts[1]) return renderHome();
