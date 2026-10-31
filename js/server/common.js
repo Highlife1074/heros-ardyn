@@ -40,6 +40,7 @@ export const DEFAULT_SETTINGS = {
   dice3d: true,
   tts: false,
   houseRules: "",
+  economy: true,           // mode économique : modèle léger, historique court, récits courts
   turnMode: "round",
   images: true,             // illustrations des scènes (Gemini via Firebase AI Logic)
   imageModel: "gemini-nano-banana-2.1",        // round (tour de table) | free (libre)

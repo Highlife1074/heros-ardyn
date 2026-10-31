@@ -136,12 +136,12 @@ function rateFor(model) {
 async function buildContext(cid, c, chars, secret, reason) {
   const s = { ...DEFAULT_SETTINGS, ...(c.settings || {}) };
   const st = c.state || {};
-  const logSnap = await db.collection(`campaigns/${cid}/log`).where("tms", ">", st.summaryUpTo || 0).orderBy("tms", "desc").limit(28).get();
+  const logSnap = await db.collection(`campaigns/${cid}/log`).where("tms", ">", st.summaryUpTo || 0).orderBy("tms", "desc").limit(s.economy ? 14 : 28).get();
   const log = logSnap.docs.map((d) => d.data()).reverse().filter((e) => !e.hiddenFromGm);
   const partyLevel = chars.length ? Math.round(chars.reduce((a, x) => a + x.level, 0) / chars.length) : 1;
   const parts = [];
   parts.push(`## Déroulement\n${s.turnMode === "round" && !c.state?.combat?.active ? TURN_GM_RULES.round + "\n" : ""}${TURN_GM_RULES.combat}`);
-  parts.push(`## Paramètres de la table\n${TONE[s.tone] || TONE.famille}\n${DIFFICULTY[s.difficulty] || DIFFICULTY.normal}\n${NARRATION[s.narration] || NARRATION.moyenne}\nProgression : ${s.xpMode === "milestone" ? "jalons (level_up_ready)" : "points d'expérience (award_xp)"}.${s.houseRules ? "\nRègles maison : " + s.houseRules : ""}${c.premise ? "\nPrémisse de campagne voulue par l'hôte : " + c.premise : ""}`);
+  parts.push(`## Paramètres de la table\n${TONE[s.tone] || TONE.famille}\n${DIFFICULTY[s.difficulty] || DIFFICULTY.normal}\n${NARRATION[s.economy ? "courte" : s.narration] || NARRATION.moyenne}\nProgression : ${s.xpMode === "milestone" ? "jalons (level_up_ready)" : "points d'expérience (award_xp)"}.${s.houseRules ? "\nRègles maison : " + s.houseRules : ""}${c.premise ? "\nPrémisse de campagne voulue par l'hôte : " + c.premise : ""}`);
   parts.push(`## Groupe (${chars.length} héros, niveau moyen ${partyLevel})\n${chars.map(charSummary).join("\n\n") || "Aucun héros créé pour l'instant."}`);
   if (st.scene?.title) parts.push(`## Scène actuelle\n${st.scene.title}${st.scene.location ? " — " + st.scene.location : ""}${st.scene.mood ? " (" + st.scene.mood + ")" : ""}`);
   if ((st.quests || []).length) parts.push(`## Quêtes\n${st.quests.map((q) => `- [${q.status}] ${q.title}${q.notes ? " : " + q.notes : ""}`).join("\n")}`);
@@ -407,7 +407,7 @@ async function execTool(ctx, name, input) {
       const map = { monster: MONSTERS, spell: R.spells, condition: R.conditions, item: R.equipment, magic_item: R.magicItems, feature: R.features }[input.kind];
       const hit = map && search(map, input.query);
       if (!hit) return `Aucun résultat pour « ${input.query} ».${input.kind === "monster" ? " Exemples de clés : " + Object.keys(MONSTERS).filter((k) => k.includes(String(input.query).toLowerCase().slice(0, 3))).slice(0, 15).join(", ") : ""}`;
-      return `${hit[0]} : ${JSON.stringify(hit[1]).slice(0, 3500)}`;
+      return `${hit[0]} : ${JSON.stringify(hit[1]).slice(0, ctx.settings?.economy ? 1500 : 3500)}`;
     }
     case "update_scene": {
       const prev = ctx.c.state?.scene || {};
@@ -486,11 +486,12 @@ export async function runGm(cid, reason = "players", depth = 0) {
     }
     const messages = [{ role: "user", content: userText }];
     const texts = []; const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, calls: 0 };
-    let usedModel = settings.model; let fellBack = false;
-    for (let i = 0; i < 9; i++) {
+    let usedModel = settings.economy ? settings.helperModel : settings.model; let fellBack = false;
+    const maxLoops = settings.economy ? 5 : 9, maxTok = settings.economy ? 1100 : 2000;
+    for (let i = 0; i < maxLoops; i++) {
       if (i) await cref.update({ "state.gmBusySince": Date.now() }); // le MJ travaille encore : on garde la main
       let resp;
-      try { resp = await anthropic().messages.create({ model: usedModel, max_tokens: 2000, system, tools: TOOLS, messages: cacheTail(messages) }); }
+      try { resp = await anthropic().messages.create({ model: usedModel, max_tokens: maxTok, system, tools: TOOLS, messages: cacheTail(messages) }); }
       catch (e) {
         // Modèle principal pas (encore) activé dans Vertex AI : on joue avec le modèle de secours plutôt que de bloquer la partie.
         if (i === 0 && [400, 403, 404].includes(e.status) && usedModel !== settings.helperModel) {

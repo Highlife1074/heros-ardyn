@@ -1,3 +1,4 @@
+import { DEFAULT_SETTINGS } from "./server/common.js";
 import { S, fn, go, isHost, activeChars, PLATFORM } from "./core.js";
 import { h, toast, busy, errMsg, confirmBox, topbar, modal } from "./ui.js";
 
@@ -16,7 +17,7 @@ export function renderHost(ctx) {
     if (!isHost()) { box.replaceChildren(h("p", {}, "Réservé à l'hôte de la campagne.")); return; }
     if (drawn) { refreshLive(); return; }
     drawn = true;
-    const c = S.campaign; const s = c.settings || {};
+    const c = S.campaign; const s = { ...DEFAULT_SETTINGS, ...(c.settings || {}) };
     const sel = (key, opts) => { const el = h("select", { name: key }, ...opts.map(([v, l]) => h("option", { value: v, selected: String(s[key]) === String(v) }, l))); return el; };
     const f = {
       name: h("input", { type: "text", value: c.name, maxlength: 80 }),
@@ -29,6 +30,7 @@ export function renderHost(ctx) {
       model: sel("model", MODELS),
       xpMode: sel("xpMode", [["xp", "Points d'expérience"], ["milestone", "Jalons (le MJ décide)"]]),
       hpMethod: sel("hpMethod", [["average", "Valeur moyenne (recommandé)"], ["roll", "Lancer le dé de vie"]]),
+      economy: sel("economy", [["true", "Oui (recommandé) : modèle léger, historique court"], ["false", "Non : meilleur récit, coût plus élevé"]]),
       images: sel("images", [["true", "Oui : une illustration à chaque nouvelle scène"], ["false", "Non"]]),
       imageModel: h("input", { type: "text", value: s.imageModel || "gemini-nano-banana-2.1", maxlength: 60 }),
       turnMode: sel("turnMode", [["round", "Tour de table : chacun son tour, puis le MJ répond à tous"], ["free", "Libre : chacun écrit quand il veut"]]),
@@ -38,7 +40,7 @@ export function renderHost(ctx) {
     const save = h("button", { class: "btn primary" }, "Enregistrer");
     save.onclick = busy(save, async () => {
       await fn("updateCampaign", { campaignId: S.cid, name: f.name.value, premise: f.premise.value,
-        settings: { tone: f.tone.value, difficulty: f.difficulty.value, narration: f.narration.value, model: f.model.value, xpMode: f.xpMode.value,
+        settings: { tone: f.tone.value, difficulty: f.difficulty.value, narration: f.narration.value, economy: f.economy.value === "true", model: f.model.value, xpMode: f.xpMode.value,
           hpMethod: f.hpMethod.value, turnMode: f.turnMode.value, images: f.images.value === "true", imageModel: f.imageModel.value.trim(), autoGmAfterRolls: f.autoGmAfterRolls.value === "true", houseRules: f.houseRules.value } });
       toast("Réglages enregistrés.");
     });
@@ -65,6 +67,7 @@ export function renderHost(ctx) {
         h("button", { class: "btn", onclick: () => go(`#/c/${S.cid}/world`) }, "🗺️ Ouvrir le monde")),
       h("section", { class: "panel" }, h("h3", {}, "Le Maître du Jeu"), h("label", {}, "Public"), f.tone, h("label", {}, "Difficulté"), f.difficulty,
         h("label", {}, "Longueur des récits"), f.narration, h("label", {}, "Modèle d'IA"), f.model,
+        h("label", {}, "Mode économique (crédit API)"), f.economy,
         h("label", {}, "Illustrations des scènes (Gemini)"), f.images,
         h("p", { class: "small muted" }, "Générées par Gemini dans ton projet Firebase : active « AI Logic » dans la console Firebase (Gemini Developer API). Les modèles d'image demandent le forfait Blaze."),
         h("label", {}, "Modèle d'image"), f.imageModel,
