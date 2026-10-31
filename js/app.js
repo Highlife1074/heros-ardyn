@@ -58,7 +58,7 @@ function renderHome() {
   closeCampaign();
   const list = h("ul", { class: "list" }, h("li", { class: "muted" }, "Chargement…"));
   const unsub = watchMyCampaigns((camps, err) => {
-    if (!camps) { list.replaceChildren(h("li", { style: { color: "var(--blood)" } }, `Lecture impossible : ${errMsg(err)}. Vérifie que les règles Firestore sont publiées.`)); return; }
+    if (!camps) { list.replaceChildren(h("li", { style: { color: "var(--blood)" } }, h("div", {}, "Lecture impossible :"), h("pre", { style: { whiteSpace: "pre-wrap", fontSize: ".8rem" } }, String(err?.message || err)), h("button", { class: "btn small", onclick: () => location.reload() }, "Réessayer"))); return; }
     list.replaceChildren(...(camps.length ? camps.map((c) => h("li", {},
       h("div", { class: "camp-item", role: "button", tabindex: 0, onclick: () => go(`#/c/${c.id}`), onkeydown: (e) => e.key === "Enter" && go(`#/c/${c.id}`) },
         h("div", { class: "seal" }, c.setting === "ardyn" ? "🐉" : "🗺️"),

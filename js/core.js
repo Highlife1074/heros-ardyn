@@ -16,7 +16,7 @@ export const fbApp = initializeApp(firebaseConfig);
 export const auth = getAuth(fbApp);
 // ignoreUndefinedProperties : un champ vide ne fait plus échouer une écriture.
 export const fs = initializeFirestore(fbApp, { ignoreUndefinedProperties: true, experimentalForceLongPolling: true });
-export const APP_VERSION = "2026-10-31 p";
+export const APP_VERSION = "2026-10-31 q";
 
 // ---------------------------------------------------------------- Plateforme pour la logique de jeu (js/server)
 // Même interface que l'ancienne version serveur : la logique n'a pas eu besoin d'être réécrite.
@@ -225,16 +225,32 @@ export async function postMessage(text, ooc = false) {
 }
 export async function updateMyCharacter(id, patch) { await updateDoc(doc(fs, "campaigns", S.cid, "characters", id), patch); }
 
+const withTimeout = (p, ms, label) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(`${label} : pas de réponse en ${ms / 1000} s`)), ms))]);
+/** Teste chaque maillon de la connexion et renvoie un texte lisible (utilisé quand Firebase ne répond pas). */
+export async function diagnose() {
+  const lines = [`Réseau du navigateur : ${navigator.onLine ? "en ligne" : "hors ligne"}`];
+  const step = async (name, fn) => { try { const r = await withTimeout(fn(), 7000, name); lines.push(`${name} : OK${r ? " (" + r + ")" : ""}`); } catch (e) { lines.push(`${name} : ÉCHEC — ${e.code || e.message}`); } };
+  await step("Jeton de connexion", async () => { await auth.currentUser.getIdToken(true); });
+  await step("Accès à Google (identitytoolkit)", async () => { await fetch("https://identitytoolkit.googleapis.com/", { mode: "no-cors" }); });
+  await step("Accès à Firestore", async () => { await fetch("https://firestore.googleapis.com/", { mode: "no-cors" }); });
+  await step("Lecture de ta fiche", async () => { const d = await getDoc(doc(fs, "campaigns", "diagnostic-inexistant")); return d.exists() ? "" : "lecture possible"; });
+  return lines.join("\n");
+}
+
 export function watchMyCampaigns(cb) {
   const q = query(collection(fs, "campaigns"), where("members", "array-contains", S.user.uid));
   const toList = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   let got = false;
   const unsub = onSnapshot(q, (snap) => { got = true; cb(toList(snap)); }, (e) => { got = true; listenError("Liste des campagnes")(e); cb(null, e); });
-  // Si la connexion temps réel ne répond pas, on tente une lecture simple, et on dit clairement ce qui se passe.
+  // Si la connexion temps réel ne répond pas : lecture simple, puis diagnostic détaillé.
   const t = setTimeout(async () => {
     if (got) return;
-    try { const snap = await getDocs(q); if (!got) { got = true; cb(toList(snap)); } }
-    catch (e) { if (!got) { got = true; cb(null, new Error(`Firebase ne répond pas (${navigator.onLine ? "réseau OK" : "hors ligne"}) : ${e.code || e.message}`)); } }
+    try { const snap = await withTimeout(getDocs(q), 6000, "Lecture des campagnes"); if (!got) { got = true; cb(toList(snap)); } }
+    catch (e) {
+      if (got) return;
+      const d = await diagnose();
+      if (!got) { got = true; cb(null, new Error(`${e.code || e.message}\n${d}`)); }
+    }
   }, 8000);
   return () => { clearTimeout(t); unsub(); };
 }
