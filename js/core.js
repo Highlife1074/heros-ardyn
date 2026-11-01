@@ -16,7 +16,7 @@ export const fbApp = initializeApp(firebaseConfig);
 export const auth = getAuth(fbApp);
 // ignoreUndefinedProperties : un champ vide ne fait plus échouer une écriture.
 export const fs = initializeFirestore(fbApp, { ignoreUndefinedProperties: true, experimentalForceLongPolling: true });
-export const APP_VERSION = "2026-11-01 d";
+export const APP_VERSION = "2026-11-01 e";
 
 // ---------------------------------------------------------------- Plateforme pour la logique de jeu (js/server)
 // Même interface que l'ancienne version serveur : la logique n'a pas eu besoin d'être réécrite.
@@ -174,7 +174,7 @@ export function openCampaign(cid) {
   if (S.cid === cid) return;
   closeCampaign();
   S.cid = cid; S.campaignError = false; S.lastError = null; S.charsLoaded = false;
-  S.subs.push(onSnapshot(doc(fs, "campaigns", cid), (snap) => { S.campaign = snap.exists() ? { id: snap.id, ...snap.data() } : null; watchWorld(S.campaign?.worldId); emit("campaign"); },
+  S.subs.push(onSnapshot(doc(fs, "campaigns", cid), (snap) => { S.campaign = snap.exists() ? { id: snap.id, ...snap.data() } : null; watchWorld(S.campaign?.worldId); emit("campaign"); illustrateForExternalGm(cid); },
     (e) => { listenError("Lecture de la campagne")(e); S.campaign = null; S.campaignError = true; emit("campaign"); }));
   S.subs.push(onSnapshot(doc(fs, "campaigns", cid, "secret", "config"), (snap) => { PLATFORM.apiKey = snap.exists() ? snap.data().apiKey || "" : ""; emit("key"); }, () => {}));
   S.subs.push(onSnapshot(collection(fs, "campaigns", cid, "characters"), (snap) => {
@@ -191,6 +191,29 @@ export function openCampaign(cid) {
     emit({ type: "log", fresh });
   }, listenError("Lecture du journal")));
 }
+/** MJ externe : le MJ tourne hors navigateur, donc un appareil de la table génère l'illustration de la nouvelle scène.
+ *  Un seul appareil s'en charge (réservation en transaction) ; l'hôte d'abord, les autres prennent le relais après quelques secondes. */
+const illustrationTried = new Set();
+function illustrateForExternalGm(cid) {
+  const c = S.campaign; const sc = c?.state?.scene;
+  if (!c?.settings?.externalGm || !sc?.imagePending || sc.imageId || !sc.at || illustrationTried.has(sc.at)) return;
+  if (Date.now() - sc.at > 10 * 60e3) return; // scène trop ancienne
+  illustrationTried.add(sc.at);
+  setTimeout(async () => {
+    try {
+      const ref = doc(fs, "campaigns", cid);
+      const mine = await runTransaction(fs, async (tx) => {
+        const s = (await tx.get(ref)).data()?.state?.scene;
+        if (!s?.imagePending || s.imageId || s.at !== sc.at) return false;
+        if (s.imageClaim && Date.now() - s.imageClaim.at < 3 * 60e3) return false;
+        tx.update(ref, { "state.scene.imageClaim": { uid: S.user?.uid || "", at: Date.now() } });
+        return true;
+      });
+      if (mine && S.cid === cid) PLATFORM.illustrate(cid, { scene: sc, prompt: sc.illustration || "", model: c.settings.imageModel, worldSetup: S.world?.setup, tone: c.settings.tone });
+    } catch (e) { console.warn("Illustration (MJ externe)", e); }
+  }, c.ownerUid === S.user?.uid ? 0 : 8000);
+}
+
 export function closeCampaign() {
   S.subs.forEach((u) => u()); S.subs = []; S.cid = null; S.campaign = null; S.chars = {}; S.log = [];
   PLATFORM.apiKey = "";

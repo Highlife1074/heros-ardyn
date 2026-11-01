@@ -412,11 +412,14 @@ async function execTool(ctx, name, input) {
     case "update_scene": {
       const prev = ctx.c.state?.scene || {};
       const scene = { title: str(input.title, 80), location: str(input.location, 80), mood: str(input.mood, 20), ambiance: str(input.ambiance, 20), at: Date.now() };
-      await db.doc(`campaigns/${cid}`).update({ "state.scene": scene });
-      ctx.c.state = { ...(ctx.c.state || {}), scene };
       // Illustration : une par nouvelle scène, générée en arrière-plan (n'attend pas)
       const newPlace = scene.title !== prev.title || scene.location !== prev.location;
-      if (ctx.settings.images !== false && newPlace && !ctx.illustrated && platform.illustrate) {
+      const wantImage = ctx.settings.images !== false && newPlace && !ctx.illustrated;
+      // MJ externe (hors navigateur) : un appareil de la table générera l'image avec Gemini.
+      if (wantImage && ctx.settings.externalGm) { ctx.illustrated = true; Object.assign(scene, { imagePending: true, illustration: str(input.illustration, 600) }); }
+      await db.doc(`campaigns/${cid}`).update({ "state.scene": scene });
+      ctx.c.state = { ...(ctx.c.state || {}), scene };
+      if (wantImage && !ctx.settings.externalGm && platform.illustrate) {
         ctx.illustrated = true;
         platform.illustrate(cid, { scene, prompt: str(input.illustration, 600), model: ctx.settings.imageModel, worldSetup: ctx.world?.setup, tone: ctx.settings.tone });
       }

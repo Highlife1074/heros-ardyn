@@ -287,6 +287,7 @@ await t("MJ externe : l'app n'appelle pas l'API, Claude joue via l'outil en lign
     const hero = F.dump(`campaigns/${cid}/characters/`).map(([p, d]) => ({ id: p.split("/").pop(), ...d }))[0];
     await lib.run(["tool", cid, "request_roll", JSON.stringify({ character_id: hero.id, kind: "skill", skill: "perception", label: "Repérer l'embuscade", dc: 13 })]);
     await lib.run(["tool", cid, "remember", JSON.stringify({ fact: "Le pont est piégé." })]);
+    await lib.run(["tool", cid, "update_scene", JSON.stringify({ title: "Le pont de Brumeval", location: "Moncalm", mood: "mystère", ambiance: "forêt", illustration: "Un vieux pont de pierre dans la brume" })]);
     await lib.run(["say", cid, "Le vent se lève sur la route de Brumeval."]);
   } finally { console.log = real; }
   const all = logs.join("\n");
@@ -297,6 +298,8 @@ await t("MJ externe : l'app n'appelle pas l'API, Claude joue via l'outil en lign
   assert.equal(st.pendingRolls.length >= 1, true, "le jet demandé apparaît chez le joueur");
   assert.ok(F.dump(`campaigns/${cid}/log/`).some(([, d]) => d.type === "gm" && /Brumeval/.test(d.text)));
   assert.ok((F.raw(`campaigns/${cid}/secret/gm`).memory || []).includes("Le pont est piégé."));
+  assert.equal(st.scene.imagePending, true, "MJ externe : l'illustration est demandée à un appareil de la table");
+  assert.match(st.scene.illustration, /vieux pont/);
   await F.db.doc(`campaigns/${cid}`).update({ "settings.externalGm": false });
 });
 
