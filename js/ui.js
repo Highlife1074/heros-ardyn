@@ -5,6 +5,9 @@ for (const m of ["replaceChildren", "append"]) {
 }
 
 // Petits utilitaires d'interface, sans framework.
+/** Texte de règles avec **gras** : renvoie des nœuds (gras rendu, aucun HTML injecté). */
+export const rich = (t) => String(t || "").split(/\*\*(.+?)\*\*/g).map((part, i) => (i % 2 ? h("b", {}, part) : part));
+
 export function h(tag, attrs = {}, ...kids) {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs || {})) {

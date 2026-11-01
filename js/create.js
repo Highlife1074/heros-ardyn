@@ -1,5 +1,5 @@
 import { S, fn, go } from "./core.js";
-import { h, toast, busy, errMsg, modal, topbar } from "./ui.js";
+import { h, rich, toast, busy, errMsg, modal, topbar } from "./ui.js";
 import { translateInto } from "./actions.js";
 import { ABILITIES, ABI_FR, ABI_FR_LONG, STANDARD_ARRAY, POINT_BUY_COST, POINT_BUY_TOTAL, pointBuySpent, mod, fmtMod, spellLimits, classSpellList, derive, hpAtLevel1 } from "./engine.js";
 import { spellPicker } from "./sheet.js";
@@ -70,8 +70,8 @@ export function renderCreate(ctx) {
   const visibleSteps = () => steps.map((s, i) => i).filter((i) => i !== 6 || isCaster());
   const choiceGrid = (entries, key, onPick) => h("div", { class: "choice-grid" }, ...entries.map(([k, title, sub]) =>
     h("button", { class: "choice", "aria-pressed": String(st[key] === k), onclick: () => { st[key] = k; onPick?.(k); draw(); } }, h("b", {}, title), h("span", {}, sub))));
-  const traitList = (ids) => h("div", {}, ...ids.map((t) => R.traits[t]).filter(Boolean).map((t) => { const p = h("div", { class: "desc" }, t.description);
-    return h("details", { class: "feature" }, h("summary", {}, t.name), p, h("button", { class: "btn small ghost", onclick: (e) => { e.preventDefault(); translateInto(p, t.description); } }, "Traduire")); }));
+  const traitList = (ids) => h("div", {}, ...ids.map((t) => R.traits[t]).filter(Boolean).map((t) => { const p = h("div", { class: "desc" }, rich(t.description));
+    return h("details", { class: "feature" }, h("summary", {}, t.name), p, t.descriptionEn ? null : h("button", { class: "btn small ghost", onclick: (e) => { e.preventDefault(); translateInto(p, t.description); } }, "Traduire")); }));
 
   function stepSpecies() {
     const sp = st.species && R.species[st.species];
@@ -94,14 +94,14 @@ export function renderCreate(ctx) {
     return [h("h2", {}, "Choisis ta classe"), magic === "rare" ? h("p", { class: "small muted" }, "Dans ce monde, la magie est rare et redoutée : un lanceur de sorts y est une exception qu'on remarque.") : null,
       choiceGrid(Object.values(R.classes).filter((c) => !okC?.length || okC.includes(c.index)).map((c) => [c.index, c.nameFr, CLASS_BLURB[c.index]]), "class", () => { st.classSkills = []; st.cantrips = []; st.spells = []; st.fightingStyle = null; st.expertise = []; st.equipClass = 0; }),
       c ? h("div", { class: "section" }, h("p", { class: "small muted" }, `Dé de vie d${c.hitDie} · Sauvegardes : ${c.saves.map((s) => ABI_FR_LONG[s]).join(", ")} · Caractéristique principale : ${c.primary.map((s) => ABI_FR_LONG[s]).join(" ou ")}`),
-        h("h3", {}, "Au niveau 1"), h("div", {}, ...c.levels["1"].features.map((f) => R.features[f]).filter(Boolean).map((f) => { const p = h("div", { class: "desc" }, f.description);
-          return h("details", { class: "feature" }, h("summary", {}, f.name), p, h("button", { class: "btn small ghost", onclick: (e) => { e.preventDefault(); translateInto(p, f.description); } }, "Traduire")); }))) : null];
+        h("h3", {}, "Au niveau 1"), h("div", {}, ...c.levels["1"].features.map((f) => R.features[f]).filter(Boolean).map((f) => { const p = h("div", { class: "desc" }, rich(f.description));
+          return h("details", { class: "feature" }, h("summary", {}, f.name), p, f.descriptionEn ? null : h("button", { class: "btn small ghost", onclick: (e) => { e.preventDefault(); translateInto(p, f.description); } }, "Traduire")); }))) : null];
   }
   function stepBackground() {
     const b = st.background && R.backgrounds[st.background];
     return [h("h2", {}, "D'où vient ton héros ?"), h("p", { class: "muted" }, "L'historique donne des compétences, un don et +3 points de caractéristiques."),
       choiceGrid(Object.values(R.backgrounds).map((b) => [b.index, b.nameFr, `${b.skills.map((s) => R.skills[s].nameFr).join(", ")} · don ${b.feat.name}`]), "background", () => { st.bgBonus = {}; st.classSkills = []; st.equipBg = 0; }),
-      b ? h("div", { class: "section" }, h("h3", {}, `Don : ${b.feat.name}${b.feat.note ? " (" + b.feat.note + ")" : ""}`), (() => { const t = R.feats[b.feat.index]?.description || ""; const p = h("div", { class: "desc" }, t); return [p, h("button", { class: "btn small ghost", onclick: () => translateInto(p, t) }, "Traduire")]; })()) : null];
+      b ? h("div", { class: "section" }, h("h3", {}, `Don : ${b.feat.name}${b.feat.note ? " (" + ({ Cleric: "clerc", Wizard: "magicien", Druid: "druide" }[b.feat.note] || b.feat.note) + ")" : ""}`), (() => { const t = R.feats[b.feat.index]?.description || ""; const p = h("div", { class: "desc" }, rich(t)); return [p, R.feats[b.feat.index]?.descriptionEn ? null : h("button", { class: "btn small ghost", onclick: () => translateInto(p, t) }, "Traduire")]; })()) : null];
   }
   /** Bonus d'historique proposé d'office : +2 sur la meilleure caractéristique utile, +1 sur la suivante (modifiable). */
   function autoBonus() {

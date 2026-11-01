@@ -56,7 +56,7 @@ await t("création d'un guerrier nain (tableau standard)", async () => {
   assert.equal(ch.abilities.str, 17); assert.equal(ch.hp.max, 10 + 2 + 1);
   const d = E.derive(R, ch);
   assert.equal(d.ac, 16 + 1, "cotte de mailles + style Défense");
-  assert.ok(d.attacks.some((a) => a.name === "Greatsword" || a.name === "Flail"));
+  assert.ok(d.attacks.some((a) => a.name === "Épée à deux mains" || a.name === "Fléau d'armes"));
 });
 
 await t("création d'un magicien elfe (4d6 tirés par le serveur)", async () => {

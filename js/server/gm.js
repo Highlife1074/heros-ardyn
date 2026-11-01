@@ -59,7 +59,7 @@ const TOOLS = [
     input_schema: S({ type: { type: "string", enum: ["short", "long"] } }, ["type"]) },
   { name: "set_inspiration", description: "Donne l'Inspiration héroïque à un héros pour un beau moment de jeu.",
     input_schema: S({ character_id: { type: "string" }, reason: { type: "string" } }, ["character_id"]) },
-  { name: "lookup", description: "Consulte le SRD : monstre, sort, état, équipement ou objet magique. Recherche par clé ou nom anglais.",
+  { name: "lookup", description: "Consulte le SRD : monstre, sort, état, équipement ou objet magique. Recherche par clé, nom français ou nom anglais.",
     input_schema: S({ kind: { type: "string", enum: ["monster", "spell", "condition", "item", "magic_item", "feature"] }, query: { type: "string" } }, ["kind", "query"]) },
   { name: "update_scene", description: "Nouvelle scène (changement de lieu, de moment ou d'atmosphère) : met à jour le bandeau, l'ambiance sonore jouée chez les joueurs et, si activée, une illustration de la scène.",
     input_schema: S({ title: { type: "string" }, location: { type: "string" }, mood: { type: "string", enum: ["calme", "mystère", "tension", "combat", "fête", "repos", "danger"] },
@@ -184,7 +184,7 @@ function monsterFor(key) { return key ? MONSTERS[key] || MONSTERS[String(key).to
 function search(obj, q) {
   const k = String(q || "").toLowerCase().trim(); const slug = k.replace(/[^a-z0-9]+/g, "-");
   if (obj[slug]) return [slug, obj[slug]];
-  const hit = Object.entries(obj).find(([key, v]) => key.includes(slug) || (v.name || "").toLowerCase().includes(k) || (v.nameFr || "").toLowerCase().includes(k));
+  const hit = Object.entries(obj).find(([key, v]) => key.includes(slug) || (v.name || "").toLowerCase().includes(k) || (v.nameFr || "").toLowerCase().includes(k) || (v.nameEn || "").toLowerCase().includes(k));
   return hit || null;
 }
 const statusOf = (sec) => statusFromHp(sec.hp, sec.maxHp);

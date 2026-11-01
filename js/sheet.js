@@ -1,7 +1,8 @@
 import { S, fn, go, isHost, myChar, updateMyCharacter, activeChars } from "./core.js";
-import { h, md, toast, busy, errMsg, modal, confirmBox, topbar, toggleTheme } from "./ui.js";
+import { h, md, rich, toast, busy, errMsg, modal, confirmBox, topbar, toggleTheme } from "./ui.js";
 import { doRoll, rollWithAdv, attackWith, castSpellFlow, translateInto } from "./actions.js";
 import { derive, ABILITIES, ABI_FR, ABI_FR_LONG, fmtMod, mod, XP_TABLE, levelUpChoices, spellLimits, classSpellList, DAMAGE_FR } from "./engine.js";
+const MASTERY_FR = { cleave: "Enchaînement", graze: "Écorchure", nick: "Coup double", push: "Poussée", sap: "Sape", slow: "Ralentissement", topple: "Renversement", vex: "Harcèlement" };
 
 const R = () => S.rules;
 
@@ -69,7 +70,7 @@ export function renderSheet(box, ch, { compact } = {}) {
 
   // Attaques
   out.push(sec("Attaques", ...d.attacks.map((a) => h("div", { class: "item-row" },
-    h("button", { class: "lnk", onclick: () => can && attackWith(a, ch) }, h("b", {}, a.name), h("div", { class: "small muted" }, `${fmtMod(a.toHit)} pour toucher · ${a.damage} ${DAMAGE_FR[a.type] || ""}${a.versatile ? ` (${a.versatile} à deux mains)` : ""}${a.mastery ? " · botte : " + a.mastery : ""}${a.prof ? "" : " · non maîtrisée"}`)),
+    h("button", { class: "lnk", onclick: () => can && attackWith(a, ch) }, h("b", {}, a.name), h("div", { class: "small muted" }, `${fmtMod(a.toHit)} pour toucher · ${a.damage} ${DAMAGE_FR[a.type] || ""}${a.versatile ? ` (${a.versatile} à deux mains)` : ""}${a.mastery ? " · botte : " + (MASTERY_FR[a.mastery] || a.mastery) : ""}${a.prof ? "" : " · non maîtrisée"}`)),
     can ? h("button", { class: "btn small", onclick: () => attackWith(a, ch) }, "🎲") : null)),
     can ? h("p", { class: "small muted" }, "Équipe ou déséquipe tes armes dans l'inventaire.") : null));
 
@@ -121,13 +122,13 @@ export function renderSheet(box, ch, { compact } = {}) {
 
   // Capacités & traits
   const feats = [];
-  for (const f of ch.featureList || []) { const x = rules.features[f]; if (x) feats.push({ name: x.name, desc: x.description, src: cls.nameFr }); }
+  for (const f of ch.featureList || []) { const x = rules.features[f]; if (x) feats.push({ name: x.name, desc: x.description, src: cls.nameFr, fr: !!x.descriptionEn }); }
   if (ch.subclass) for (const f of rules.subclasses[ch.subclass].features.filter((x) => x.level <= ch.level)) feats.push({ name: f.name, desc: f.description, src: rules.subclasses[ch.subclass].name });
-  for (const t of ch.traits || []) { const x = rules.traits[t]; if (x) feats.push({ name: x.name, desc: x.description, src: sp.nameFr }); }
-  for (const f of ch.feats || []) { const x = rules.feats[f]; if (x) feats.push({ name: x.name, desc: x.description, src: "Don" }); }
-  out.push(sec("Capacités, traits et dons", ...feats.map((f) => { const p = h("div", { class: "desc" }, f.desc);
+  for (const t of ch.traits || []) { const x = rules.traits[t]; if (x) feats.push({ name: x.name, desc: x.description, src: sp.nameFr, fr: !!x.descriptionEn }); }
+  for (const f of ch.feats || []) { const x = rules.feats[f]; if (x) feats.push({ name: x.name, desc: x.description, src: "Don", fr: !!x.descriptionEn }); }
+  out.push(sec("Capacités, traits et dons", ...feats.map((f) => { const p = h("div", { class: "desc" }, rich(f.desc));
     return h("details", { class: "feature" }, h("summary", {}, f.name, h("span", { class: "small muted" }, ` · ${f.src}`)), p,
-      h("button", { class: "btn small ghost", onclick: (e) => { e.preventDefault(); translateInto(p, f.desc); } }, "Traduire en français")); })));
+      f.fr ? null : h("button", { class: "btn small ghost", onclick: (e) => { e.preventDefault(); translateInto(p, f.desc); } }, "Traduire en français")); })));
 
   // Histoire & notes
   const field = (key, label, rows = 4) => {
@@ -241,7 +242,7 @@ async function levelUpWizard(ch) {
     };
     const featOpts = Object.entries(rules.feats).filter(([k, f]) => (need.epicBoon ? ["epic-boon"] : ["general", "origin"]).includes(f.type) && k !== "ability-score-improvement" && (!(ch.feats || []).includes(k) || f.repeatable));
     const modeSel = h("select", {}, h("option", { value: "asi" }, "Améliorer mes caractéristiques"), ...featOpts.map(([k, f]) => h("option", { value: k }, `Don : ${f.name}`)));
-    modeSel.onchange = () => { choices.asi = modeSel.value === "asi" ? { mode: "asi", inc: {} } : { mode: "feat", feat: modeSel.value }; modeSel.value === "asi" ? drawAsi() : asiBox.replaceChildren(h("p", { class: "desc" }, rules.feats[modeSel.value].description)); };
+    modeSel.onchange = () => { choices.asi = modeSel.value === "asi" ? { mode: "asi", inc: {} } : { mode: "feat", feat: modeSel.value }; modeSel.value === "asi" ? drawAsi() : asiBox.replaceChildren(h("p", { class: "desc" }, rich(rules.feats[modeSel.value].description))); };
     drawAsi();
     body.append(h("div", {}, h("h4", {}, need.epicBoon ? "Faveur épique" : "Amélioration"), modeSel, asiBox));
   }
@@ -266,7 +267,7 @@ async function levelUpWizard(ch) {
 function pickOne(title, entries, set) {
   const desc = h("p", { class: "desc" });
   const sel = h("select", {}, h("option", { value: "" }, "Choisir…"), ...entries.map(([k, f]) => h("option", { value: k }, f.name)));
-  sel.onchange = () => { set(sel.value); desc.textContent = entries.find(([k]) => k === sel.value)?.[1].description || ""; };
+  sel.onchange = () => { set(sel.value); desc.replaceChildren(...rich(entries.find(([k]) => k === sel.value)?.[1].description)); };
   return h("div", {}, h("h4", {}, title), sel, desc);
 }
 export function spellPicker(title, list, max, arr) {
