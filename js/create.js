@@ -30,6 +30,28 @@ const SPECIES_BLURB = {
   tiefling: "Héritage d'outre-monde, magie innée et résistance. Souvent mal vus.",
 };
 const ARDYN_ORIGINS = ["Idaris (La Blanche)", "Istar", "Handorf", "Belion", "Moncalm", "Valerm", "Hardyll", "Collines Bleues", "Bois de Belm", "Aelen errant", "Jorgland", "Terres de l'Est (Helgen)", "Le Bethel", "Benemor"];
+// Peuples d'Ardyn (bible) : choix d'origine pour les elfes, nains et humains. lineage = lignée SRD conseillée.
+const ARDYN_PEOPLES = {
+  elf: [
+    { name: "Bois de Belm", place: "Bois de Belm", lineage: "elven-lineage-wood-elf", desc: "Les Adaptateurs : alliés de l'Empire, conseillers et diplomates du roi druide Sanchours. La plupart des elfes qu'on croise." },
+    { name: "Elenesti", place: "Istar (enclave elenesti)", lineage: "elven-lineage-high-elf", desc: "Les Déchirés : hauts elfes de l'enclave d'Istar, neutres absolus, gardiens des lames de la Source Argentée." },
+    { name: "Selvanari", place: "Royaume selvanari", lineage: "elven-lineage-wood-elf", desc: "Le Grand Schisme : royaume sylvain fermé du roi Andhuyll, qui méprise le monde. Un Selvanari dehors est rare… ou exilé." },
+    { name: "Aelen", place: "Aelen errant", lineage: "elven-lineage-high-elf", desc: "Les Gardiens de la Mémoire : errants mélancoliques d'une forêt brûlée, qu'on croise près des ruines et des champs de bataille." },
+    { name: "Qaalish", place: "Qaalish", lineage: "elven-lineage-wood-elf", desc: "Les derniers elfes de la forêt primordiale en ruines du roi Edelanost, peuplée de créatures féériques." },
+  ],
+  dwarf: [
+    { name: "Hardyll", place: "Hardyll", desc: "La plus vieille cité naine, à demi ruinée par les sièges et la Phtisie Grise. Fiers, éprouvés, en guerre contre les orques." },
+    { name: "Collines Bleues", place: "Collines Bleues", desc: "Nains des collines partis d'Hardyll : bâtisseurs prospères des villes de l'Empire, sujets du roi Beombur le Gros." },
+  ],
+  human: [
+    { name: "Empire de Wermar", place: "Handorf", desc: "Fédération libre et savante : Handorf, Valerm, Moncalm, Belion, le Val d'Eren… Bibliothèques, commerce et routes ouvertes." },
+    { name: "Idaris", place: "Idaris (La Blanche)", desc: "Théocratie de Juredo aux murs blancs, surveillée par la Main de Juredo. On y craint la magie." },
+    { name: "Istar", place: "Istar", desc: "Royaume marchand des dragons fondé sur la liberté, grenier à blé de l'Empire." },
+    { name: "Terres de l'Est", place: "Terres de l'Est (Helgen)", desc: "Steppes et collines des treize tribus indomptables, sous la poigne du roi Beorgrim." },
+    { name: "Le Bethel", place: "Le Bethel", desc: "Cité libre de la magie, refuge des mages traqués par la Guilde et nid d'espions." },
+    { name: "Saabed", place: "Saabed", desc: "Désert du Sud, terre des bédouins d'où vint jadis Albos." },
+  ],
+};
 const PORTRAITS = ["🛡️", "⚔️", "🏹", "🪓", "🗡️", "🔮", "📜", "🌿", "🔥", "❄️", "⚡", "🌙", "☀️", "🐉", "🦉", "🐺", "🦊", "🐻", "🦅", "🍀", "👑", "🎻", "⚒️", "🧭"];
 
 export function renderCreate(ctx) {
@@ -37,7 +59,7 @@ export function renderCreate(ctx) {
   const st = { step: 0, species: null, subspecies: null, class: null, background: null, abilityMethod: "standard",
     base: { str: 15, dex: 14, con: 13, int: 12, wis: 10, cha: 8 }, rolled: null, bgBonus: {}, bonusMode: "2-1",
     classSkills: [], humanSkill: null, humanFeat: null, fightingStyle: null, expertise: [], equipClass: 0, equipBg: 0,
-    cantrips: [], spells: [], name: "", portrait: "🛡️", origin: "", appearance: "", backstory: "" };
+    cantrips: [], spells: [], people: null, name: "", portrait: "🛡️", origin: "", appearance: "", backstory: "" };
   const steps = ["Espèce", "Classe", "Historique", "Caractéristiques", "Compétences", "Équipement", "Sorts", "Identité"];
   const body = h("div"); const bar = h("div", { class: "steps" }); const nav = h("div", { class: "row", style: { marginTop: "22px" } });
   const err = h("p", { class: "panel hidden", role: "alert", style: { borderColor: "var(--blood)", color: "var(--blood)", marginTop: "16px" } });
@@ -54,7 +76,14 @@ export function renderCreate(ctx) {
   function stepSpecies() {
     const sp = st.species && R.species[st.species];
     const okS = S.world?.setup?.allowedSpecies;
-    return [h("h2", {}, "Choisis ton peuple"), choiceGrid(Object.values(R.species).filter((s) => !okS?.length || okS.includes(s.index)).map((s) => [s.index, ardyn ? s.nameArdyn || s.nameFr : s.nameFr, SPECIES_BLURB[s.index] || ""]), "species", () => { st.subspecies = null; if (st.species !== "human") { st.humanSkill = null; st.humanFeat = null; } }),
+    const peoples = ardyn && sp ? ARDYN_PEOPLES[sp.index] : null;
+    return [h("h2", {}, "Choisis ton peuple"), choiceGrid(Object.values(R.species).filter((s) => !okS?.length || okS.includes(s.index)).map((s) => [s.index, ardyn ? s.nameArdyn || s.nameFr : s.nameFr, SPECIES_BLURB[s.index] || ""]), "species", () => { st.subspecies = null; st.people = null; if (st.species !== "human") { st.humanSkill = null; st.humanFeat = null; } }),
+      peoples ? h("div", {}, h("h3", { style: { marginTop: "18px" } }, "Ton peuple en Ardyn"),
+        h("div", { class: "choice-grid" }, ...peoples.map((p) => h("button", { class: "choice", "aria-pressed": String(st.people === p.name), onclick: () => {
+          const prev = peoples.find((x) => x.name === st.people);
+          if (!st.origin || st.origin === prev?.place) st.origin = p.place;
+          st.people = p.name; if (p.lineage && sp.subspecies.includes(p.lineage)) st.subspecies = p.lineage; draw();
+        } }, h("b", {}, p.name), h("span", {}, p.desc + (p.lineage ? ` (lignée conseillée : ${R.subspecies[p.lineage].name.replace(/^.*?: /, "")})` : "")))))) : null,
       sp?.subspecies.length ? h("div", {}, h("h3", { style: { marginTop: "18px" } }, "Lignée"), choiceGrid(sp.subspecies.map((k) => [k, R.subspecies[k].name.replace(/^.*?: /, ""), R.subspecies[k].damageType ? "Énergie : " + R.subspecies[k].damageType : ""]), "subspecies")) : null,
       sp ? h("div", { class: "section" }, h("h3", {}, "Traits"), traitList([...sp.traits, ...(st.subspecies ? R.subspecies[st.subspecies].traits : [])])) : null];
   }
@@ -181,7 +210,8 @@ export function renderCreate(ctx) {
   function valid(i) {
     const c = st.class && R.classes[st.class];
     switch (i) {
-      case 0: return (!!st.species && (!R.species[st.species].subspecies.length || !!st.subspecies)) || "Choisis un peuple (et une lignée).";
+      case 0: if (ardyn && ARDYN_PEOPLES[st.species] && !st.people) return "Choisis ton peuple en Ardyn.";
+        return (!!st.species && (!R.species[st.species].subspecies.length || !!st.subspecies)) || "Choisis un peuple (et une lignée).";
       case 1: return !!st.class || "Choisis une classe.";
       case 2: return !!st.background || "Choisis un historique.";
       case 3: { if (st.abilityMethod === "roll" && !st.rolled) return "Lance d'abord tes caractéristiques.";

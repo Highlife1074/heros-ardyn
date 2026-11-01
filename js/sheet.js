@@ -37,7 +37,7 @@ export function renderSheet(box, ch, { compact } = {}) {
     h("button", { class: "portrait", "aria-label": "Changer l'icône", onclick: mine ? () => editPortrait(ch) : null, style: { cursor: mine ? "pointer" : "default", color: "inherit" } }, ch.portrait || "🛡️"),
     h("div", { class: "grow" }, h("h2", { style: { margin: 0 } }, ch.name),
       h("div", { class: "small muted" }, `${ardyn && sp?.nameArdyn ? sp.nameArdyn : sp?.nameFr}${ch.subspecies ? " (" + rules.subspecies[ch.subspecies].name.replace(/^.*?: /, "") + ")" : ""} · ${cls.nameFr} niveau ${ch.level}${ch.subclass ? " · " + rules.subclasses[ch.subclass].name : ""}`),
-      h("div", { class: "small muted" }, `${bg?.nameFr || ""}${ch.origin ? " · " + ch.origin : ""} · joué par ${ch.ownerName}`))));
+      h("div", { class: "small muted" }, `${ch.people ? ch.people + " · " : ""}${bg?.nameFr || ""}${ch.origin ? " · " + ch.origin : ""} · joué par ${ch.ownerName}`))));
   if (ch.alive === false) out.push(h("p", { class: "panel", style: { borderColor: "var(--blood)" } }, "☠️ Ce héros est tombé. L'hôte peut le ramener à la vie (résurrection, miracle…) depuis ses outils."));
   if (canLevel) out.push(h("div", { class: "levelup", style: { marginTop: "12px" } }, h("span", { style: { fontSize: "1.6rem" } }, "⭐"), h("div", { class: "grow" }, h("b", {}, "Montée de niveau disponible !"), h("div", { class: "small" }, `Passer au niveau ${ch.level + 1}`)), h("button", { class: "btn primary", onclick: () => levelUpWizard(ch) }, "Monter")));
 

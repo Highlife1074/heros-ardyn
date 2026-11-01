@@ -147,7 +147,7 @@ export async function createCharacter(uid, { campaignId, draft }) {
     skills: [...skills], expertise, feats, traits, extraProfs: [],
     inventory, gold, conditions: [], exhaustion: 0, inspiration: false, deathSaves: { success: 0, fail: 0 },
     appearance: str(d.appearance, 1500), backstory: str(d.backstory, 4000), portrait: str(d.portrait, 8) || "🛡️",
-    origin: str(d.origin, 120), notes: "", levelUpReady: false, alive: true,
+    people: str(d.people, 60), origin: str(d.origin, 120), notes: "", levelUpReady: false, alive: true,
   };
   autoEquip(ch);
   const hpMax = hpAtLevel1(R, ch);

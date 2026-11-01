@@ -89,7 +89,7 @@ function charSummary(ch) {
   const inv = (ch.inventory || []).slice(0, 25).map((i) => `${i.name}${i.qty > 1 ? " ×" + i.qty : ""}${i.equipped ? " (équipé)" : ""}`).join(", ");
   return [
     `### ${ch.name} — id: ${ch.id} — joué par ${ch.ownerName}`,
-    `${sp?.nameFr || ch.species}${ch.subspecies ? " (" + (R.subspecies[ch.subspecies]?.name || "") + ")" : ""} ${cls?.nameFr} niv. ${ch.level}${ch.subclass ? " — " + R.subclasses[ch.subclass]?.name : ""} · ${ch.origin || ""}`,
+    `${sp?.nameFr || ch.species}${ch.people ? " — peuple : " + ch.people : ""}${ch.subspecies ? " (" + (R.subspecies[ch.subspecies]?.name || "") + ")" : ""} ${cls?.nameFr} niv. ${ch.level}${ch.subclass ? " — " + R.subclasses[ch.subclass]?.name : ""} · ${ch.origin || ""}`,
     `PV ${ch.hp.current}/${ch.hp.max}${ch.hp.temp ? " (+" + ch.hp.temp + " temp)" : ""} · CA ${d.ac} · Init ${fmtMod(d.initiative)} · Vitesse ${d.speed} pieds · Perception passive ${d.passive}${ch.alive === false ? " · MORT" : ""}${ch.hp.current === 0 && ch.alive !== false ? ` · À 0 PV (sauvegardes contre la mort : ${ch.deathSaves?.success || 0} réussites / ${ch.deathSaves?.fail || 0} échecs)` : ""}`,
     `Carac : ${Object.entries(d.abilities).map(([k, v]) => `${ABI_FR[k]} ${v} (${fmtMod(mod(v))})`).join(", ")} · Sauvegardes maîtrisées : ${(cls?.saves || []).map((s) => ABI_FR[s]).join(", ")}`,
     `Compétences : ${skills}`,
