@@ -181,7 +181,7 @@ export function renderCreate(ctx) {
   function valid(i) {
     const c = st.class && R.classes[st.class];
     switch (i) {
-      case 0: return st.species && (!R.species[st.species].subspecies.length || st.subspecies) || "Choisis un peuple (et une lignée).";
+      case 0: return (!!st.species && (!R.species[st.species].subspecies.length || !!st.subspecies)) || "Choisis un peuple (et une lignée).";
       case 1: return !!st.class || "Choisis une classe.";
       case 2: return !!st.background || "Choisis un historique.";
       case 3: { if (st.abilityMethod === "roll" && !st.rolled) return "Lance d'abord tes caractéristiques.";

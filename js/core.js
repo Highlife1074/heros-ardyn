@@ -16,7 +16,7 @@ export const fbApp = initializeApp(firebaseConfig);
 export const auth = getAuth(fbApp);
 // ignoreUndefinedProperties : un champ vide ne fait plus échouer une écriture.
 export const fs = initializeFirestore(fbApp, { ignoreUndefinedProperties: true, experimentalForceLongPolling: true });
-export const APP_VERSION = "2026-10-31 r";
+export const APP_VERSION = "2026-11-01 a";
 
 // ---------------------------------------------------------------- Plateforme pour la logique de jeu (js/server)
 // Même interface que l'ancienne version serveur : la logique n'a pas eu besoin d'être réécrite.
