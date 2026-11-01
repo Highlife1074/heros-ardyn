@@ -153,10 +153,17 @@ async function editPortrait(ch) {
   if (r) await updateMyCharacter(ch.id, { portrait: r });
 }
 
+/** Fiche d'un sort : caractéristiques et description (en français pour les tours de magie et sorts de niveau 1). */
+export function spellDetails(s) {
+  const p = h("div", { class: "desc", style: { color: "var(--vellum)" } }, rich(s.description), s.higher ? h("div", { style: { marginTop: "8px" } }, h("b", {}, "Aux niveaux supérieurs. "), s.higher) : null);
+  const node = h("div", {}, h("p", { class: "small muted" }, `${s.level ? "Niveau " + s.level : "Tour de magie"} · ${s.school} · Incantation : ${s.time} · Portée : ${s.range} · Composantes : ${s.components.join(", ")}${s.material ? " (" + s.material + ")" : ""} · Durée : ${s.duration}${s.concentration ? " · concentration" : ""}${s.ritual ? " · rituel" : ""}`), p);
+  return { node, p, english: !s.descriptionEn };
+}
+
 function spellInfo(idx, ch) {
-  const s = R().spells[idx]; const p = h("div", { class: "desc", style: { color: "var(--vellum)" } }, s.description + (s.higher ? "\n\nAux niveaux supérieurs : " + s.higher : ""));
-  modal(s.name, h("div", {}, h("p", { class: "small muted" }, `${s.level ? "Niveau " + s.level : "Tour de magie"} · ${s.school} · Incantation : ${s.time} · Portée : ${s.range} · Composantes : ${s.components.join(", ")}${s.material ? " (" + s.material + ")" : ""} · Durée : ${s.duration}`), p),
-    [{ label: "Traduire", value: () => { translateInto(p, s.description + (s.higher ? "\n\nAt Higher Levels: " + s.higher : "")); return undefined; } },
+  const s = R().spells[idx]; const { node, p, english } = spellDetails(s);
+  modal(s.name, node,
+    [...(english ? [{ label: "Traduire", value: () => { translateInto(p, s.description + (s.higher ? "\n\nAt Higher Levels: " + s.higher : "")); return undefined; } }] : []),
       ...(ch.ownerUid === S.user.uid || isHost() ? [{ label: "Lancer ce sort", class: "btn primary", value: () => { castSpellFlow(idx, ch); return true; } }] : [])]);
 }
 
@@ -272,10 +279,14 @@ function pickOne(title, entries, set) {
 }
 export function spellPicker(title, list, max, arr) {
   const count = h("span", { class: "small muted" }, ` 0 / ${max}`);
-  return h("div", {}, h("h4", {}, title, count), h("div", { style: { maxHeight: "260px", overflowY: "auto" } }, ...list.map((s) => {
-    const b = h("button", { class: "chip", "aria-pressed": "false", style: { margin: "3px" }, title: s.description.slice(0, 300) }, `${s.name}${s.level ? " (" + s.level + ")" : ""}`);
+  count.textContent = ` ${arr.length} / ${max}`;
+  return h("div", {}, h("h4", {}, title, count), h("p", { class: "small muted", style: { margin: "0 0 4px" } }, "Touche un sort pour le choisir, ⓘ pour voir ce qu'il fait."),
+    h("div", { style: { maxHeight: "320px", overflowY: "auto" } }, ...list.map((s) => {
+    const b = h("button", { class: "chip", "aria-pressed": String(arr.includes(s.index)), style: { margin: "3px 0 3px 3px" } }, `${s.name}${s.level ? " (" + s.level + ")" : ""}`);
     b.onclick = () => { const i = arr.indexOf(s.index); if (i >= 0) arr.splice(i, 1); else if (arr.length < max) arr.push(s.index); else return toast("Maximum atteint."); b.setAttribute("aria-pressed", String(arr.includes(s.index))); count.textContent = ` ${arr.length} / ${max}`; };
-    return b;
+    const info = h("button", { class: "chip", "aria-label": `Description de ${s.name}`, style: { margin: "3px 6px 3px 2px", padding: "4px 9px" } }, "ⓘ");
+    info.onclick = () => { const { node, p, english } = spellDetails(s); modal(s.name, node, [...(english ? [{ label: "Traduire", value: () => { translateInto(p, s.description); return undefined; } }] : []), { label: "Fermer", value: null }]); };
+    return h("span", { style: { display: "inline-flex", alignItems: "center" } }, b, info);
   })));
 }
 

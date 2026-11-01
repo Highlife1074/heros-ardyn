@@ -9,6 +9,7 @@ from fr_class import FEATS, SUBCLASSES, FEATURES
 from fr_spells import SPELLS, SPELL_FIELDS, FEET_M
 from fr_items import EQUIPMENT, MAGIC_ITEMS, RARITY
 from fr_features import FEATURE_DESC
+from fr_spell_desc import SPELL_DESC
 
 P = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "rules.json")
 R = json.load(open(P, encoding="utf-8"))
@@ -78,6 +79,10 @@ def field_fr(s):
 
 for k, v in R["spells"].items():
     name_from(SPELLS, v, "spells", k)
+    if k in SPELL_DESC:
+        d, hi = SPELL_DESC[k]
+        set_fr(v, "description", d)
+        if hi: v.setdefault("higherEn", v.get("higher")); v["higher"] = hi
     for f in ("time", "range", "duration"):
         if isinstance(v.get(f), str): set_fr(v, f, field_fr(en(v, f)))
 for k, v in R["equipment"].items():
