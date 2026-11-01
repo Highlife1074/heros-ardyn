@@ -70,8 +70,8 @@ const TOOLS = [
   { name: "world_add", description: "Ajoute au monde un élément NOUVEAU et durable que tu viens d'inventer (lieu, PNJ important, faction, légende, créature, objet notable, coutume, culte), ou complète un élément déjà ajouté (même nom). Il devient canon pour toute la suite et pour les futures campagnes dans ce monde. N'ajoute pas les figurants sans importance.",
     input_schema: S({ category: { type: "string", enum: Object.keys(CATEGORIES) }, name: { type: "string" }, summary: { type: "string", description: "Une ou deux phrases" },
       details: { type: "string", description: "Détails utiles pour rester cohérent (lieu, liens, motivations, secrets)" }, revealed: { type: "boolean", description: "true si les joueurs le découvrent maintenant (il entre dans leur codex)" } }, ["category", "name", "summary"]) },
-  { name: "world_reveal", description: "Les joueurs découvrent un élément du monde déjà ajouté : il apparaît dans leur codex.",
-    input_schema: S({ name: { type: "string" } }, ["name"]) },
+  { name: "world_reveal", description: "Carnet des héros : les héros rencontrent un personnage notable, visitent un lieu important ou apprennent quelque chose sur un élément du monde (de la bible ou déjà ajouté). L'élément apparaît (ou se complète) dans leur carnet. Pour un élément de la bible, donne category et known.",
+    input_schema: S({ name: { type: "string" }, category: { type: "string", enum: Object.keys(CATEGORIES) }, known: { type: "string", description: "Ce que les héros en savent maintenant, en une à trois phrases, sans aucun secret" } }, ["name"]) },
   { name: "remember", description: "Note un fait important à retenir pour la suite (PNJ, secret, promesse, lieu inventé). Mémoire longue du MJ, invisible aux joueurs.",
     input_schema: S({ fact: { type: "string" } }, ["fact"]) },
 ];
@@ -439,7 +439,7 @@ async function execTool(ctx, name, input) {
     }
     case "world_reveal": {
       if (!ctx.world) return "Erreur : pas de monde lié.";
-      return revealEntry(ctx.world, input.name);
+      return revealEntry(ctx.world, cid, input);
     }
     case "remember": {
       ctx.secret.memory = [...(ctx.secret.memory || []), str(input.fact, 300)].slice(-120);
@@ -676,13 +676,27 @@ export async function pingGm(uid, { campaignId }) {
 }
 
 /** Génère la version suivante de la bible : base + ajouts canon, réécrite proprement. */
-export async function consolidateWorld(uid, { worldId, note = "", campaignId }) {
+export async function consolidateWorld(uid, { worldId, note = "", campaignId, entryIds = null, simple = false }) {
   const w = await loadWorld(worldId);
   if (!w) throw new HttpsError("not-found", "Monde introuvable.");
   if (w.ownerUid !== uid) throw new HttpsError("permission-denied", "Seul le créateur du monde peut publier une nouvelle version.");
   const snap = await db.collection(`worlds/${worldId}/entries`).get();
-  const entries = snap.docs.filter((d) => !d.data().merged && d.data().status !== "proposed");
-  if (!entries.length) throw new HttpsError("failed-precondition", "Aucun nouvel ajout validé à intégrer.");
+  const pick = Array.isArray(entryIds) ? new Set(entryIds) : null;
+  const entries = snap.docs.filter((d) => !d.data().merged && d.data().status !== "proposed" && (!pick || pick.has(d.id)));
+  if (!entries.length) throw new HttpsError("failed-precondition", "Aucun ajout sélectionné à intégrer.");
+  const version = (w.version || 1) + 1;
+  // Sans clé Claude (MJ externe) ou sur demande : ajout simple en fin de bible, sans réécriture.
+  if (simple || !platform.apiKey) {
+    const byCat = {};
+    for (const d of entries) { const e = d.data(); (byCat[e.revealed ? (CATEGORIES[e.category] || e.category) : "Secrets nés des parties (MJ seulement)"] ||= []).push(e); }
+    const block = `\n\n## Ajouts des parties — version ${version}${note ? ` (${str(note, 300)})` : ""}\n` + Object.entries(byCat).map(([cat, list]) =>
+      `\n### ${cat}\n` + list.map((e) => `- **${e.name}** : ${e.summary}${e.details ? " — " + e.details : ""}`).join("\n")).join("\n");
+    const text = w.baseText + block;
+    await db.doc(`worlds/${worldId}/versions/${version}`).set({ version, text, at: Date.now(), note: str(note, 500), added: entries.map((d) => d.data().name), simple: true });
+    await db.doc(`worlds/${worldId}`).update({ baseText: text, version });
+    for (const d of entries) await d.ref.update({ merged: true, mergedIn: version });
+    return { version, added: entries.length, simple: true };
+  }
   const list = entries.map((d) => { const e = d.data(); return `- [${CATEGORIES[e.category] || e.category}] ${e.name}${e.revealed ? "" : " (connu du MJ seulement)"} : ${e.summary}${e.details ? " — " + e.details : ""}`; }).join("\n");
   const camp = campaignId ? (await db.doc(`campaigns/${campaignId}`).get()).data() : null;
   const model = camp?.settings?.model || DEFAULT_SETTINGS.model;
@@ -691,7 +705,6 @@ export async function consolidateWorld(uid, { worldId, note = "", campaignId }) 
   const msg = await stream.finalMessage();
   const text = msg.content.filter((b) => b.type === "text").map((b) => b.text).join("").trim();
   if (text.length < w.baseText.length * 0.8) throw new HttpsError("internal", "La nouvelle version semble incomplète : rien n'a été modifié. Réessaie.");
-  const version = (w.version || 1) + 1;
   await db.doc(`worlds/${worldId}/versions/${version}`).set({ version, text, at: Date.now(), note: str(note, 500), added: entries.map((d) => d.data().name) });
   await db.doc(`worlds/${worldId}`).update({ baseText: text, version });
   for (const d of entries) await d.ref.update({ merged: true, mergedIn: version });

@@ -3,7 +3,7 @@ import { h, md, toast, busy, errMsg, modal, topbar, toggleTheme } from "./ui.js"
 import { doRoll } from "./actions.js";
 import { renderSheet } from "./sheet.js";
 import { derive, statusFromHp, fmtMod } from "./engine.js";
-import { codexList } from "./world.js";
+import { codexList, showIntro } from "./world.js";
 import { micButton } from "./voice.js";
 import { whoseTurn } from "./turnlogic.js";
 import { setAmbiance, guessAmbiance, setAmbienceEnabled, ambienceEnabled, setAmbienceVolume, AMBIANCES, wakeAmbience } from "./ambience.js";
@@ -309,7 +309,8 @@ function journalPanel() {
   const icon = { active: "🔸", done: "✅", failed: "✖️" };
   return h("div", { class: "stack" },
     h("section", {}, h("h3", {}, "Quêtes"), quests.length ? h("ul", { class: "list" }, ...quests.map((q) => h("li", {}, `${icon[q.status] || "🔸"} `, h("b", {}, q.title), q.notes ? h("div", { class: "small muted" }, q.notes) : null))) : h("p", { class: "muted" }, "Pas encore de quête.")),
-    h("section", {}, h("h3", {}, "Codex du monde"), codexList(S.entries || []), h("button", { class: "btn small", style: { marginTop: "8px" }, onclick: () => go(`#/c/${S.cid}/world`) }, "Ouvrir le monde")),
+    h("section", {}, h("h3", {}, "📓 Carnet des héros"), h("p", { class: "small muted" }, "Personnages rencontrés et lieux découverts, notés au fil de l'aventure."), codexList(S.entries || []),
+      h("div", { class: "row", style: { marginTop: "8px" } }, h("button", { class: "btn small", onclick: () => showIntro() }, "📖 Le monde en bref"), h("button", { class: "btn small", onclick: () => go(`#/c/${S.cid}/world`) }, "Ouvrir le monde"))),
     h("section", {}, h("h3", {}, "Ce qui s'est passé"), st.summary ? h("div", { class: "desc", style: { color: "var(--vellum)" } }, st.summary) : h("p", { class: "muted" }, "Le résumé s'écrit au fil de la partie.")),
     st.restGrant && Date.now() - st.restGrant.at < 3 * 3600e3 ? h("p", { class: "panel small" }, st.restGrant.type === "long" ? "🌙 Un repos long est en cours : validez-le depuis votre fiche." : "☕ Un repos court est en cours : dépensez vos dés de vie depuis votre fiche.") : null);
 }

@@ -1,7 +1,7 @@
 // Écran « Monde » : cadre fixé par l'hôte, ajouts du MJ à relire, versions de la bible, codex des joueurs.
-import { S, fn, go, isWorldOwner, fs } from "./core.js";
+import { S, fn, go, isWorldOwner, fs, PLATFORM } from "./core.js";
 import { collection, getDocs } from "../vendor/firebase/firebase-firestore.js";
-import { h, toast, busy, errMsg, modal, confirmBox, topbar, timeAgo } from "./ui.js";
+import { h, md, toast, busy, errMsg, modal, confirmBox, topbar, timeAgo } from "./ui.js";
 
 export const CATEGORIES = { lieu: "Lieu", pnj: "Personnage", faction: "Faction", histoire: "Histoire et légendes", creature: "Créature", objet: "Objet notable", culture: "Culture et coutumes", religion: "Religion et magie" };
 const CAT_ICON = { lieu: "🏰", pnj: "👤", faction: "⚜️", histoire: "📜", creature: "🐺", objet: "🗝️", culture: "🍷", religion: "🕯️" };
@@ -14,6 +14,11 @@ const MAGIC = [
   ["high", "Courante", "Fantasy héroïque classique : la magie est partout. Déconseillé pour le ton recherché."],
 ];
 
+/** Résumé du monde que tout joueur connaît (modifiable par l'hôte ; par défaut, celui d'Ardyn). */
+export const worldIntro = () => S.world?.setup?.publicIntro || ((S.world?.base || S.campaign?.setting) === "ardyn" ? S.ardynPublic || "" : "");
+export const introNode = (text = worldIntro()) => text ? h("div", { class: "intro", html: md(text) }) : h("p", { class: "muted" }, "L'hôte n'a pas encore écrit de résumé du monde.");
+export function showIntro() { modal("Le monde en bref", introNode(), [{ label: "Fermer", value: null }]); }
+
 export function renderWorld(ctx) {
   const box = h("main", { class: "wrap stack" });
   let tab = "entries"; let filter = "new";
@@ -24,12 +29,25 @@ export function renderWorld(ctx) {
     if (!w) { box.replaceChildren(h("p", { class: S.worldError ? "" : "muted" }, S.worldError ? `Le monde est inaccessible : ${S.lastError || ""}` : S.campaign && !S.campaign.worldId ? "Cette campagne n'a pas de monde lié." : "Chargement du monde…")); return; }
     const owner = isWorldOwner();
     const proposed = S.entries.filter((e) => e.status === "proposed").length;
-    const tabs = owner ? [["entries", `Ajouts${proposed ? ` (${proposed} à valider)` : ""}`], ["setup", "Cadre"], ["versions", "Versions"]] : [["entries", "Codex"]];
+    const tabs = owner ? [["entries", `Ajouts${proposed ? ` (${proposed} à valider)` : ""}`], ["intro", "Résumé joueurs"], ["setup", "Cadre"], ["versions", "Versions"]] : [["entries", "Carnet"], ["intro", "Le monde en bref"]];
     const head = h("div", {}, h("h2", { style: { marginBottom: "2px" } }, w.name), h("p", { class: "small muted" }, `Bible version ${w.version} · ${S.entries.length} élément${S.entries.length > 1 ? "s" : ""} ${owner ? "ajoutés" : "découverts"}`),
       h("div", { class: "tabs", role: "tablist" }, ...tabs.map(([k, l]) => h("button", { role: "tab", "aria-selected": String(tab === k), onclick: () => { tab = k; draw(); } }, l))));
-    const content = tab === "setup" && owner ? setupPanel(w) : tab === "versions" && owner ? versionsPanel(w) : entriesPanel(w, owner);
+    const content = tab === "intro" ? introPanel(w, owner) : tab === "setup" && owner ? setupPanel(w) : tab === "versions" && owner ? versionsPanel(w) : entriesPanel(w, owner);
     box.replaceChildren(head, content);
   };
+
+  function introPanel(w, owner) {
+    if (!owner) return introNode();
+    const edit = h("button", { class: "btn small" }, "Modifier le résumé");
+    edit.onclick = async () => {
+      const ta = h("textarea", { rows: 18 }, worldIntro());
+      const r = await modal("Résumé pour les joueurs", h("div", {}, h("p", { class: "small muted" }, "Ce que tous les héros savent du monde. Aucun secret ici : tous les joueurs le lisent. Titres avec ##, gras avec **…**."), ta),
+        [{ label: "Annuler", value: null }, { label: "Enregistrer", class: "btn primary", value: true }]);
+      if (r) await fn("updateWorld", { worldId: w.id, setup: { publicIntro: ta.value } }).then(() => toast("Résumé enregistré.")).catch((e) => toast(errMsg(e), "error"));
+    };
+    const reset = w.setup?.publicIntro && w.base === "ardyn" ? h("button", { class: "btn small ghost", onclick: () => fn("updateWorld", { worldId: w.id, setup: { publicIntro: "" } }).then(() => toast("Résumé d'origine rétabli.")).catch((e) => toast(errMsg(e), "error")) }, "Rétablir le résumé d'origine") : null;
+    return h("div", { class: "stack" }, h("p", { class: "small muted" }, "Voici ce que voient tes joueurs dans « Le monde en bref »."), h("div", { class: "row" }, edit, reset), h("section", { class: "panel" }, introNode()));
+  }
 
   function entriesPanel(w, owner) {
     if (!owner) return codexList(S.entries);
@@ -53,8 +71,8 @@ export function renderWorld(ctx) {
     return h("div", { class: "feature" },
       h("div", { class: "row" }, h("span", {}, CAT_ICON[e.category] || "•"), h("b", { class: "grow" }, e.name),
         e.status === "proposed" ? h("span", { class: "badge magic" }, "proposition") : null, owner ? h("span", { class: "badge" + (e.revealed ? " eq" : "") }, e.revealed ? "dans le codex" : "secret du MJ") : null),
-      h("div", { class: "small muted" }, `${CATEGORIES[e.category] || ""} · ajouté par ${e.source === "hôte" ? "toi" : "le MJ"} ${e.at ? timeAgo(e.at) : ""}${e.mergedIn ? ` · intégré en v${e.mergedIn}` : ""}`),
-      h("p", { style: { margin: "6px 0 0" } }, e.summary), e.details && owner ? h("p", { class: "desc", style: { margin: "4px 0 0" } }, e.details) : null, actions);
+      h("div", { class: "small muted" }, `${CATEGORIES[e.category] || ""} · ${e.source === "bible" ? "élément de la bible découvert par les héros" : "ajouté par " + (e.source === "hôte" ? "toi" : "le MJ")} ${e.at ? timeAgo(e.at) : ""}${e.mergedIn ? ` · intégré en v${e.mergedIn}` : ""}`),
+      h("p", { style: { margin: "6px 0 0" } }, e.summary), e.known && e.known !== e.summary ? h("p", { class: "small", style: { margin: "4px 0 0" } }, "📓 Ce que savent les héros : ", e.known) : null, e.details && owner ? h("p", { class: "desc", style: { margin: "4px 0 0" } }, e.details) : null, actions);
   }
 
   async function entryDialog(w, e) {
@@ -117,15 +135,27 @@ export function renderWorld(ctx) {
         h("div", { class: "small muted" }, `${new Date(v.at).toLocaleDateString("fr-FR")}${v.note ? " · " + v.note : ""}${v.added?.length ? ` · ${v.added.length} ajout${v.added.length > 1 ? "s" : ""}` : ""}`)),
         h("button", { class: "btn small", onclick: () => download(`${w.name}_v${v.version}.md`, v.text) }, "Télécharger"))));
     }).catch((e) => list.replaceChildren(h("li", {}, errMsg(e))));
-    const ready = S.entries.filter((e) => !e.merged && e.status !== "proposed").length;
+    const readyList = S.entries.filter((e) => !e.merged && e.status !== "proposed");
+    const ready = readyList.length;
+    const picked = new Set(readyList.map((e) => e.id));
+    const pickList = h("div", {}, ...readyList.map((e) => { const cb = h("input", { type: "checkbox", checked: true }); cb.onchange = () => { cb.checked ? picked.add(e.id) : picked.delete(e.id); };
+      return h("label", { class: "row", style: { alignItems: "flex-start", margin: "6px 0" } }, cb, h("span", {}, `${CAT_ICON[e.category] || "•"} `, h("b", {}, e.name), h("span", { class: "small muted" }, ` — ${e.summary}`))); }));
     const note = h("input", { type: "text", maxlength: 300, placeholder: "Note de version (facultatif), ex. « Après la campagne de Moncalm »" });
-    const gen = h("button", { class: "btn primary", disabled: !ready }, `Créer la version ${w.version + 1}`);
-    gen.onclick = busy(gen, async () => {
-      if (!(await confirmBox(`Bible version ${w.version + 1}`, `Le MJ va réécrire la bible complète en y intégrant ${ready} ajout${ready > 1 ? "s" : ""}. Les versions précédentes restent téléchargeables. Cela prend 2 à 5 minutes.`, "Lancer"))) return;
-      toast("Rédaction de la nouvelle bible en cours… garde cette page ouverte.");
-      const r = await fn("consolidateWorld", { worldId: w.id, note: note.value, campaignId: S.cid });
-      toast(`Version ${r.version} publiée avec ${r.added} ajouts.`); draw();
-    });
+    const hasKey = !!PLATFORM.apiKey;
+    const run = async (simple) => {
+      if (!picked.size) return toast("Coche au moins un élément.", "error");
+      const n = picked.size;
+      const msg = simple ? `${n} élément${n > 1 ? "s" : ""} ser${n > 1 ? "ont ajoutés" : "a ajouté"} à la fin de la bible, rangé${n > 1 ? "s" : ""} par catégorie. Les versions précédentes restent téléchargeables.`
+        : `Claude va réécrire la bible complète en y intégrant ${n} élément${n > 1 ? "s" : ""}. Les versions précédentes restent téléchargeables. Cela prend 2 à 5 minutes.`;
+      if (!(await confirmBox(`Bible version ${w.version + 1}`, msg, "Lancer"))) return;
+      if (!simple) toast("Rédaction de la nouvelle bible en cours… garde cette page ouverte.");
+      const r = await fn("consolidateWorld", { worldId: w.id, note: note.value, campaignId: S.cid, entryIds: [...picked], simple });
+      toast(`Version ${r.version} publiée avec ${r.added} ajout${r.added > 1 ? "s" : ""}.`); draw();
+    };
+    const gen = h("button", { class: "btn primary", disabled: !ready || !hasKey, title: hasKey ? "" : "Nécessite la clé Claude de la campagne" }, `Réécrire la bible (v${w.version + 1})`);
+    gen.onclick = busy(gen, () => run(false));
+    const simpleBtn = h("button", { class: hasKey ? "btn" : "btn primary", disabled: !ready }, `Ajouter à la bible (v${w.version + 1})`);
+    simpleBtn.onclick = busy(simpleBtn, () => run(true));
     const edit = h("button", { class: "btn small" }, "Modifier la bible actuelle à la main");
     edit.onclick = async () => {
       const ta = h("textarea", { rows: 18, style: { fontFamily: "var(--sans)", fontSize: ".9rem" } }, w.baseText);
@@ -134,9 +164,10 @@ export function renderWorld(ctx) {
     };
     return h("div", { class: "stack" },
       h("section", { class: "panel" }, h("h3", {}, "Nouvelle version de la bible"),
-        h("p", {}, ready ? `${ready} ajout${ready > 1 ? "s" : ""} validé${ready > 1 ? "s" : ""} en attente d'intégration.` : "Aucun nouvel ajout validé pour l'instant."),
-        h("p", { class: "small muted" }, "Le MJ fusionne la bible actuelle et les ajouts en un document complet et cohérent, qui devient la base de toutes les campagnes de ce monde. Les secrets de l'auteur sont conservés."),
-        note, h("div", { class: "row", style: { marginTop: "10px" } }, gen, edit)),
+        h("p", {}, ready ? `${ready} ajout${ready > 1 ? "s" : ""} validé${ready > 1 ? "s" : ""} en attente : coche ceux à intégrer. Les autres restent en attente pour plus tard.` : "Aucun nouvel ajout validé pour l'instant."),
+        pickList,
+        h("p", { class: "small muted" }, "« Ajouter à la bible » range les éléments cochés à la fin de la bible, par catégorie. « Réécrire la bible » demande à Claude (clé de la campagne) de les fondre dans le texte. Dans les deux cas, la nouvelle version sert de base à toutes les campagnes de ce monde et les secrets de l'auteur sont conservés."),
+        note, h("div", { class: "row", style: { marginTop: "10px", flexWrap: "wrap" } }, simpleBtn, gen, edit)),
       h("section", { class: "panel" }, h("h3", {}, "Historique"), list));
   }
 
@@ -145,12 +176,12 @@ export function renderWorld(ctx) {
 }
 
 export function codexList(entries) {
-  const shown = entries.filter((e) => e.revealed);
-  if (!shown.length) return h("p", { class: "muted" }, "Le codex se remplit à mesure que vous découvrez le monde.");
+  const shown = entries.filter((e) => e.revealed).sort((a, b) => (b.revealedAt || b.at || 0) - (a.revealedAt || a.at || 0));
+  if (!shown.length) return h("p", { class: "muted" }, "Le carnet se remplit à mesure que vos héros rencontrent des personnages et découvrent des lieux.");
   const by = {};
   for (const e of shown) (by[e.category] ||= []).push(e);
   return h("div", {}, ...Object.entries(by).map(([k, list]) => h("section", { class: "section" }, h("h3", {}, `${CAT_ICON[k] || ""} ${CATEGORIES[k] || k}`),
-    ...list.map((e) => h("div", { class: "feature" }, h("b", {}, e.name), h("p", { style: { margin: "4px 0 0" } }, e.summary))))));
+    ...list.map((e) => h("div", { class: "feature" }, h("b", {}, e.name), h("p", { style: { margin: "4px 0 0" } }, e.known || e.summary))))));
 }
 
 function download(name, text) {

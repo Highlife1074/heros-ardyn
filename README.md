@@ -6,6 +6,8 @@ Même format que mes autres apps : **GitHub Pages** pour le site, **Firebase** (
 - Comptes, campagnes avec code d'invitation, un héros par joueur.
 - Création de personnage complète (SRD 5.2, compatible Héros & Dragons), fiche vivante, progression 1 → 20.
 - Maître du Jeu Claude : narration en français, jets demandés avec DD secret, combats, XP, trésors, repos, quêtes, mémoire de campagne.
+- **Le monde en bref** : résumé public d'Ardyn (`data/ardyn-public.md`, sans secrets), lisible par tous à la création du héros et dans le journal ; l'hôte peut le réécrire (🗺️ → Résumé joueurs).
+- **Carnet des héros** : le MJ y inscrit les personnages rencontrés et les lieux découverts (éléments de la bible ou inventions). L'hôte choisit ensuite, dans 🗺️ → Versions, quels ajouts intégrer à la bible (ajout simple sans clé, ou réécriture par Claude).
 - Monde vivant (🗺️) : cadre fixé par l'hôte (Lancedragon / Seigneur des Anneaux / Game of Thrones, magie rare, interdits, classes et peuples jouables), ajouts du MJ à relire, Bible vN téléchargeable, codex des joueurs.
 - Dés 3D ; chaque jet est enregistré immédiatement dans Firestore et visible de toute la table (impossible de relancer en douce).
 - Écran de table (📺) avec voix du MJ.

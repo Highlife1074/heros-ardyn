@@ -14,7 +14,7 @@ globalThis.__TEST__ = {
   db: F.db, FieldValue: F.FieldValue,
   RULES: JSON.parse(load("rules.json")), MONSTERS: JSON.parse(load("monsters.json")), BIBLE: load("bible-ardyn.md"),
   hash: async (t) => createHash("sha1").update(t).digest("hex"),
-  requestGm: (cid, reason) => gmWakes.push({ cid, reason }),
+  requestGm: (cid, reason) => gmWakes.push({ cid, reason }), apiKey: "test",
   anthropic: { messages: {
     create: async (req) => { calls.push(req); const r = script.shift(); if (!r) throw new Error("script vide"); return r(req); },
     stream: (req) => ({ finalMessage: async () => { calls.push(req); return script.shift()(req); } }),
@@ -228,6 +228,36 @@ await t("Bible v2 : fusion des ajouts validés, nouvelle campagne dans le même 
   const c2 = await camp.createCampaign(P, { name: "Campagne 2", worldId: wid, displayName: "Philippe" });
   assert.equal(F.raw(`campaigns/${c2.id}`).worldId, wid);
   await expectErr(camp.createCampaign(K, { name: "Vol", worldId: wid }), /appartient/);
+});
+
+await t("carnet des héros : élément de la bible découvert, intégration simple et sélective à la bible", async () => {
+  const wid = F.raw(`campaigns/${cid}`).worldId;
+  script.push(resp([tool("world_reveal", { name: "Draishlin", category: "pnj", known: "Grand Mage de la cour d'Idaris, chef de la Guilde des Mages." }),
+    tool("world_reveal", { name: "Inconnu total" }),
+    tool("world_add", { category: "lieu", name: "Le Gué aux Corbeaux", summary: "Passage à gué sur l'Enduine.", revealed: true }),
+    tool("world_add", { category: "pnj", name: "Mère Ortie", summary: "Herboriste du gué.", revealed: true })]));
+  script.push(resp([{ type: "text", text: "…" }], "end_turn"));
+  await gm.runGm(cid, "players");
+  const all = (await F.db.collection(`worlds/${wid}/entries`).get()).docs.map((d) => ({ id: d.id, ...d.data() }));
+  const dr = all.find((e) => e.name === "Draishlin");
+  assert.ok(dr.revealed && dr.merged && dr.source === "bible", "élément de la bible : au carnet, pas proposé à la bible");
+  assert.ok(!all.find((e) => e.name === "Inconnu total"));
+  // le MJ sait ce qui est déjà au carnet
+  script.push(resp([{ type: "text", text: "…" }], "end_turn"));
+  await gm.runGm(cid, "players");
+  assert.match(calls[calls.length - 1].system.map((b) => b.text).join("\n"), /CARNET DES HÉROS[^]*Draishlin/);
+  // l'hôte choisit : seul le gué entre dans la bible, en ajout simple (sans réécriture par Claude)
+  const gue = all.find((e) => e.name === "Le Gué aux Corbeaux"); const ortie = all.find((e) => e.name === "Mère Ortie");
+  assert.equal(gue.status, "proposed", "mode validation : l'hôte décide");
+  await worlds.editEntry(P, { worldId: wid, entryId: gue.id, patch: { status: "canon" } });
+  await worlds.editEntry(P, { worldId: wid, entryId: ortie.id, patch: { status: "canon" } });
+  const before = F.raw(`worlds/${wid}`);
+  const r = await gm.consolidateWorld(P, { worldId: wid, entryIds: [gue.id], simple: true, note: "Séance 2" });
+  assert.equal(r.added, 1); assert.equal(r.version, before.version + 1);
+  const w = F.raw(`worlds/${wid}`);
+  assert.ok(w.baseText.startsWith(before.baseText)); assert.match(w.baseText, /Ajouts des parties — version \d+ \(Séance 2\)[^]*Le Gué aux Corbeaux/);
+  assert.doesNotMatch(w.baseText, /Mère Ortie/);
+  assert.equal(F.raw(`worlds/${wid}/entries/${ortie.id}`).merged, false, "non cochée : reste en attente");
 });
 
 await t("tour de table : ordre tournant, tour imposé, MJ appelé quand tout le monde a joué", async () => {

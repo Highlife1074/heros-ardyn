@@ -16,7 +16,7 @@ export const fbApp = initializeApp(firebaseConfig);
 export const auth = getAuth(fbApp);
 // ignoreUndefinedProperties : un champ vide ne fait plus échouer une écriture.
 export const fs = initializeFirestore(fbApp, { ignoreUndefinedProperties: true, experimentalForceLongPolling: true });
-export const APP_VERSION = "2026-11-01 c";
+export const APP_VERSION = "2026-11-01 d";
 
 // ---------------------------------------------------------------- Plateforme pour la logique de jeu (js/server)
 // Même interface que l'ancienne version serveur : la logique n'a pas eu besoin d'être réécrite.
@@ -107,9 +107,10 @@ let ready = null;
 export function loadServer() {
   if (!ready) ready = (async () => {
     const get = async (f, kind) => { const r = await fetch(url(f), { cache: "no-cache" }); if (!r.ok) throw new Error(`Fichier ${f} introuvable (${r.status})`); return kind === "text" ? r.text() : r.json(); };
-    const [rules, monsters, bible] = await Promise.all([
-      get("../data/rules.json"), get("../data/monsters.json"), get("../data/bible-ardyn.md", "text"),
+    const [rules, monsters, bible, ardynPublic] = await Promise.all([
+      get("../data/rules.json"), get("../data/monsters.json"), get("../data/bible-ardyn.md", "text"), get("../data/ardyn-public.md", "text").catch(() => ""),
     ]);
+    S.ardynPublic = ardynPublic;
     Object.assign(PLATFORM, { RULES: rules, MONSTERS: monsters, BIBLE: bible });
     S.rules = rules;
     globalThis.__PLATFORM__ = PLATFORM;

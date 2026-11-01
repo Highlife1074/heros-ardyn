@@ -32,6 +32,7 @@ export function cleanSetup(s = {}) {
   if (s.allowedClasses) { out.allowedClasses = cleanList(s.allowedClasses, Object.keys(RULES.classes)); if (!out.allowedClasses.length) throw new HttpsError("invalid-argument", "Garde au moins une classe."); }
   if (s.allowedSpecies) { out.allowedSpecies = cleanList(s.allowedSpecies, Object.keys(RULES.species)); if (!out.allowedSpecies.length) throw new HttpsError("invalid-argument", "Garde au moins un peuple."); }
   if (["auto", "review"].includes(s.additionMode)) out.additionMode = s.additionMode;
+  if (s.publicIntro != null) out.publicIntro = str(s.publicIntro, 12000);
   return out;
 }
 
@@ -119,25 +120,41 @@ export async function gmAddEntry(world, cid, input) {
   if (all.length >= 600) return "Le carnet du monde est plein : demande à l'hôte de générer une nouvelle version de la bible.";
   const status = world.setup?.additionMode === "review" ? "proposed" : "canon";
   await col.doc().set({ name, category: CATEGORIES[input.category] ? input.category : "lieu", summary: str(input.summary, 500), details: str(input.details, 3000),
-    revealed: !!input.revealed, secret: !input.revealed, status, source: "MJ", campaignId: cid, at: Date.now(), merged: false });
+    revealed: !!input.revealed, secret: !input.revealed, status, source: "MJ", campaignId: cid, at: Date.now(), ...(input.revealed ? { revealedAt: Date.now() } : {}), merged: false });
   await db.doc(`worlds/${world.id}`).update({ entryCount: FieldValue.increment(1) });
   return `Ajouté au monde (${status === "proposed" ? "proposition en attente de validation par l'hôte" : "canon"}) : ${name}.`;
 }
 
-export async function revealEntry(world, name) {
-  const all = (await db.collection(`worlds/${world.id}/entries`).get()).docs;
-  const hit = all.find((d) => d.data().name.toLowerCase() === String(name).toLowerCase());
-  if (!hit) return `Aucune entrée « ${name} ».`;
-  await hit.ref.update({ revealed: true }); return "Entrée ajoutée au codex des joueurs.";
+/** Carnet des héros : rend visible un élément déjà ajouté, ou y inscrit un élément de la bible que les héros découvrent. */
+export async function revealEntry(world, cid, input) {
+  const name = str(typeof input === "string" ? input : input?.name, 100).trim();
+  const known = str(input?.known || input?.summary, 500).trim();
+  if (!name) return "Erreur : nom manquant.";
+  const col = db.collection(`worlds/${world.id}/entries`);
+  const all = (await col.get()).docs;
+  const hit = all.find((d) => d.data().name.toLowerCase() === name.toLowerCase());
+  if (hit) {
+    await hit.ref.update({ revealed: true, ...(known ? { known } : {}), revealedAt: hit.data().revealedAt || Date.now() });
+    return `« ${hit.data().name} » est dans le carnet des héros.`;
+  }
+  if (!known) return `Aucune entrée « ${name} » : pour un élément de la bible, donne aussi known (ce que les héros en savent) et category.`;
+  // Élément déjà décrit dans la bible : il entre au carnet sans être proposé comme ajout à la bible.
+  await col.doc().set({ name, category: CATEGORIES[input.category] ? input.category : "lieu", summary: known, known, details: "", revealed: true, secret: false,
+    status: "canon", source: "bible", campaignId: cid, at: Date.now(), revealedAt: Date.now(), merged: true });
+  await db.doc(`worlds/${world.id}`).update({ entryCount: FieldValue.increment(1) });
+  return `« ${name} » inscrit au carnet des héros.`;
 }
 
 /** Texte des ajouts non encore fusionnés, pour le prompt du MJ. */
 export async function additionsText(world) {
-  const docs = (await db.collection(`worlds/${world.id}/entries`).get()).docs.map((d) => d.data()).filter((e) => !e.merged);
-  if (!docs.length) return "";
+  const all = (await db.collection(`worlds/${world.id}/entries`).get()).docs.map((d) => d.data());
+  const docs = all.filter((e) => !e.merged);
+  const carnet = all.filter((e) => e.revealed).map((e) => e.name);
+  const carnetText = carnet.length ? `\n\n# CARNET DES HÉROS (éléments déjà connus des joueurs)\n${carnet.join(", ")}` : "";
+  if (!docs.length) return carnetText.trim();
   docs.sort((a, b) => (a.category > b.category ? 1 : -1) || a.at - b.at);
   return `# AJOUTS AU MONDE DEPUIS LA VERSION ${world.version} (canon établi pendant les parties — à respecter)\n` +
-    docs.map((e) => `- [${CATEGORIES[e.category] || e.category}] ${e.name}${e.status === "proposed" ? " (proposition non validée)" : ""}${e.revealed ? "" : " (connu du MJ seulement)"} : ${e.summary}${e.details ? " — " + e.details.slice(0, 600) : ""}`).join("\n");
+    docs.map((e) => `- [${CATEGORIES[e.category] || e.category}] ${e.name}${e.status === "proposed" ? " (proposition non validée)" : ""}${e.revealed ? "" : " (connu du MJ seulement)"} : ${e.summary}${e.details ? " — " + e.details.slice(0, 600) : ""}`).join("\n") + carnetText;
 }
 
 export const CONSOLIDATE_PROMPT = `Tu es l'archiviste d'un univers de fantasy. On te donne la bible actuelle du monde et la liste des ajouts créés pendant les parties de jeu de rôle. Rédige la NOUVELLE VERSION COMPLÈTE de la bible, en français :

@@ -264,3 +264,7 @@ body.screen-mode { font-size: 22px; }
 .entry.scene-img figcaption { font-size: .8rem; color: var(--vellum-dim); text-align: center; margin-top: 4px; font-style: italic; }
 .screen .entry.scene-img { max-width: 900px; }
 input[type=range] { width: 100%; accent-color: var(--bronze); }
+.intro h4 { margin: 1.1em 0 .3em; font-family: var(--serif); color: var(--bronze); }
+.intro p, .intro li { line-height: 1.5; }
+.intro ul { padding-left: 1.2em; margin: .3em 0; }
+.intro li { margin: .25em 0; }

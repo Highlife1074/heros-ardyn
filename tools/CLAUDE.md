@@ -15,6 +15,7 @@ Tout est en français. Les secrets de la bible ne doivent jamais être révélé
      `node tools/mj.mjs tool CID request_roll '{"…": "…"}'` (le résultat est renvoyé ; les dés sont tirés par l'application, jamais par toi).
    - Ne prétends JAMAIS le résultat d'un dé : demande le jet avec `request_roll` et attends (étape 3 : l'app te rappellera quand les jets sont faits).
    - Mets à jour la scène avec `update_scene` à chaque changement de lieu (ambiance sonore automatique chez les joueurs).
+   - Tiens le **carnet des héros** : personnage notable rencontré ou lieu important découvert → `world_reveal` (name, category, known = ce que les héros en savent, sans secret) pour un élément de la bible ; `world_add` avec `revealed: true` pour une invention.
 6. Termine TOUJOURS par le récit : `node tools/mj.mjs say CID "…ton récit…"` (ou via stdin pour un texte long).
    Cela publie le texte, ouvre le tour suivant et lève l'attente. Puis reviens à l'étape 3.
 

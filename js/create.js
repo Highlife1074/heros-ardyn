@@ -3,6 +3,7 @@ import { h, rich, toast, busy, errMsg, modal, topbar } from "./ui.js";
 import { translateInto } from "./actions.js";
 import { ABILITIES, ABI_FR, ABI_FR_LONG, STANDARD_ARRAY, POINT_BUY_COST, POINT_BUY_TOTAL, pointBuySpent, mod, fmtMod, spellLimits, classSpellList, derive, hpAtLevel1 } from "./engine.js";
 import { spellPicker } from "./sheet.js";
+import { showIntro } from "./world.js";
 
 const CLASS_BLURB = {
   barbarian: "Guerrier sauvage porté par sa rage. Très résistant, frappe fort, adore foncer.",
@@ -77,7 +78,7 @@ export function renderCreate(ctx) {
     const sp = st.species && R.species[st.species];
     const okS = S.world?.setup?.allowedSpecies;
     const peoples = ardyn && sp ? ARDYN_PEOPLES[sp.index] : null;
-    return [h("h2", {}, "Choisis ton peuple"), choiceGrid(Object.values(R.species).filter((s) => !okS?.length || okS.includes(s.index)).map((s) => [s.index, ardyn ? s.nameArdyn || s.nameFr : s.nameFr, SPECIES_BLURB[s.index] || ""]), "species", () => { st.subspecies = null; st.people = null; if (st.species !== "human") { st.humanSkill = null; st.humanFeat = null; } }),
+    return [h("h2", {}, "Choisis ton peuple"), ardyn ? h("p", {}, h("button", { class: "btn small", onclick: () => showIntro() }, "📖 Découvrir Ardyn en quelques minutes")) : null, choiceGrid(Object.values(R.species).filter((s) => !okS?.length || okS.includes(s.index)).map((s) => [s.index, ardyn ? s.nameArdyn || s.nameFr : s.nameFr, SPECIES_BLURB[s.index] || ""]), "species", () => { st.subspecies = null; st.people = null; if (st.species !== "human") { st.humanSkill = null; st.humanFeat = null; } }),
       peoples ? h("div", {}, h("h3", { style: { marginTop: "18px" } }, "Ton peuple en Ardyn"),
         h("div", { class: "choice-grid" }, ...peoples.map((p) => h("button", { class: "choice", "aria-pressed": String(st.people === p.name), onclick: () => {
           const prev = peoples.find((x) => x.name === st.people);
