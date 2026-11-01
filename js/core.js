@@ -1,4 +1,5 @@
 import { initializeApp } from "../vendor/firebase/firebase-app.js";
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "../vendor/firebase/firebase-app-check.js";
 import { getAuth } from "../vendor/firebase/firebase-auth.js";
 import {
   initializeFirestore, doc, collection, onSnapshot, query, orderBy, limit, addDoc, serverTimestamp, updateDoc, where,
@@ -13,6 +14,13 @@ if (!firebaseConfig.apiKey) {
   throw new Error("Configuration Firebase absente");
 }
 export const fbApp = initializeApp(firebaseConfig);
+// App Check (reCAPTCHA Enterprise) : prouve à Firebase AI Logic que les requêtes viennent bien de l'appli.
+// En local, un jeton de debug s'affiche dans la console : à enregistrer dans Console Firebase → App Check → Gérer les jetons de débogage.
+if (["localhost", "127.0.0.1"].includes(location.hostname)) self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+initializeAppCheck(fbApp, {
+  provider: new ReCaptchaEnterpriseProvider("6LfSNwsuAAAAABFp2w4W04tyhrbin-m1NPnBFRRO"),
+  isTokenAutoRefreshEnabled: true,
+});
 export const auth = getAuth(fbApp);
 // ignoreUndefinedProperties : un champ vide ne fait plus échouer une écriture.
 export const fs = initializeFirestore(fbApp, { ignoreUndefinedProperties: true, experimentalForceLongPolling: true });
