@@ -7,7 +7,7 @@ export function partyOrder(c, chars) {
 
 /** Qui a la parole ? { mode: "free" | "round" | "combat" | "gm", charId, waitingRolls } */
 export function whoseTurn(c, chars) {
-  const s = { turnMode: "round", ...(c.settings || {}) };
+  const s = { turnMode: "free", ...(c.settings || {}) };
   const st = c.state || {};
   const waitingRolls = (st.pendingRolls || []).length > 0;
   const cb = st.combat;

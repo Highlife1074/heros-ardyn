@@ -1,7 +1,7 @@
 import { HttpsError, logger, platform, randomInt, db, RULES, MONSTERS, BIBLE_ARDYN, FieldValue, DEFAULT_SETTINGS, rollExpr, newId, addLog, str, clamp, loadCampaign } from "./common.js";
 import { derive, mod, fmtMod, ABI_FR, XP_TABLE, statusFromHp, DAMAGE_FR } from "../engine.js";
 import { applyHpChange } from "./characters.js";
-import { GM_CORE, TONE, DIFFICULTY, NARRATION, GENERIC_WORLD, SUMMARY_PROMPT } from "./prompts.js";
+import { GM_CORE, PLAYSTYLE, TONE, DIFFICULTY, NARRATION, GENERIC_WORLD, SUMMARY_PROMPT } from "./prompts.js";
 import { newRound, TURN_GM_RULES } from "./turns.js";
 import { loadWorld, setupText, additionsText, gmAddEntry, revealEntry, CATEGORIES, CONSOLIDATE_PROMPT } from "./worlds.js";
 
@@ -141,6 +141,7 @@ async function buildContext(cid, c, chars, secret, reason) {
   const partyLevel = chars.length ? Math.round(chars.reduce((a, x) => a + x.level, 0) / chars.length) : 1;
   const parts = [];
   parts.push(`## Déroulement\n${s.turnMode === "round" && !c.state?.combat?.active ? TURN_GM_RULES.round + "\n" : ""}${TURN_GM_RULES.combat}`);
+  parts.push(`## Style de jeu\n${PLAYSTYLE[s.playStyle] || PLAYSTYLE.ouvert}`);
   parts.push(`## Paramètres de la table\n${TONE[s.tone] || TONE.famille}\n${DIFFICULTY[s.difficulty] || DIFFICULTY.normal}\n${NARRATION[s.economy ? "courte" : s.narration] || NARRATION.moyenne}\nProgression : ${s.xpMode === "milestone" ? "jalons (level_up_ready)" : "points d'expérience (award_xp)"}.${s.houseRules ? "\nRègles maison : " + s.houseRules : ""}${c.premise ? "\nPrémisse de campagne voulue par l'hôte : " + c.premise : ""}`);
   parts.push(`## Groupe (${chars.length} héros, niveau moyen ${partyLevel})\n${chars.map(charSummary).join("\n\n") || "Aucun héros créé pour l'instant."}`);
   if (st.scene?.title) parts.push(`## Scène actuelle\n${st.scene.title}${st.scene.location ? " — " + st.scene.location : ""}${st.scene.mood ? " (" + st.scene.mood + ")" : ""}`);
@@ -164,7 +165,9 @@ async function buildContext(cid, c, chars, secret, reason) {
   parts.push(`## Journal récent\n${log.map(fmtLog).join("\n") || "(vide)"}`);
   const gmSpoke = log.some((e) => e.type === "gm") || !!st.summary;
   let ask;
-  if (!gmSpoke) ask = "La partie commence. Ouvre l'aventure : plante le décor de façon captivante, présente brièvement la situation de départ qui réunit les héros (en t'appuyant sur leurs histoires), utilise update_scene et update_quest, puis demande ce qu'ils font.";
+  if (!gmSpoke) ask = s.playStyle === "guide"
+    ? "La partie commence. Ouvre l'aventure : plante le décor de façon captivante, présente brièvement la situation de départ qui réunit les héros (en t'appuyant sur leurs histoires), utilise update_scene et update_quest, puis demande ce qu'ils font."
+    : "La partie commence. Plante un lieu vivant et une situation de départ simple (pas une mission imposée), en t'appuyant sur les histoires des héros : ils peuvent y être ensemble ou avoir chacun leur raison d'y être. Fais sentir 3 accroches différentes dans le décor (rumeur, PNJ, détail étrange…) sans en désigner une. N'ouvre aucune quête pour l'instant. Utilise update_scene, puis demande simplement ce que fait chaque héros, en rappelant qu'ils sont libres d'aller où ils veulent.";
   else if (reason === "rolls") ask = "Tous les jets demandés ont été faits. Narre leurs conséquences et poursuis.";
   else ask = "Les joueurs attendent ta réponse. Réagis à leurs dernières actions et fais avancer l'histoire.";
   parts.push(`## À toi, MJ\n${ask}`);

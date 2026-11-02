@@ -42,9 +42,10 @@ export const DEFAULT_SETTINGS = {
   houseRules: "",
   externalGm: false,       // MJ externe : Claude (abonnement) joue via tools/mj.mjs, aucun appel API
   economy: true,           // mode économique : modèle léger, historique court, récits courts
-  turnMode: "round",
+  turnMode: "free",
+  playStyle: "ouvert",       // ouvert (monde ouvert, sans rail) | guide (aventure guidée)
   images: true,             // illustrations des scènes (Gemini via Firebase AI Logic)
-  imageModel: "gemini-nano-banana-2.1",        // round (tour de table) | free (libre)
+  imageModel: "gemini-nano-banana-2.1",        
 };
 
 /** Dé tiré par le générateur cryptographique ; le résultat est enregistré aussitôt et définitivement dans Firestore. */

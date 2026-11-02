@@ -5,6 +5,7 @@ Même format que mes autres apps : **GitHub Pages** pour le site, **Firebase** (
 ## Contenu
 - Comptes, campagnes avec code d'invitation, un héros par joueur.
 - Création de personnage complète (SRD 5.2, compatible Héros & Dragons), fiche vivante, progression 1 → 20.
+- **Style de jeu** (⚙️) : *Monde ouvert* par défaut (pas de scénario imposé, plusieurs pistes proposées, héros libres de se séparer, conséquences de leurs choix) ou *Aventure guidée*. Le tour de table est désormais facultatif (écriture libre par défaut).
 - Maître du Jeu Claude : narration en français, jets demandés avec DD secret, combats, XP, trésors, repos, quêtes, mémoire de campagne.
 - **Le monde en bref** : résumé public d'Ardyn (`data/ardyn-public.md`, sans secrets), lisible par tous à la création du héros et dans le journal ; l'hôte peut le réécrire (🗺️ → Résumé joueurs).
 - **Carnet des héros** : le MJ y inscrit les personnages rencontrés et les lieux découverts (éléments de la bible ou inventions). L'hôte choisit ensuite, dans 🗺️ → Versions, quels ajouts intégrer à la bible (ajout simple sans clé, ou réécriture par Claude).
