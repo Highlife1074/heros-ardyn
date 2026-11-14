@@ -43,7 +43,7 @@ export const DEFAULT_SETTINGS = {
   externalGm: false,       // MJ externe : Claude (abonnement) joue via tools/mj.mjs, aucun appel API
   economy: true,           // mode économique : modèle léger, historique court, récits courts
   turnMode: "free",
-  playStyle: "ouvert",       // ouvert (monde ouvert, sans rail) | guide (aventure guidée)
+  playStyle: "impitoyable", // impitoyable (monde indifférent, backlog) | ouvert | guide
   images: true,             // illustrations des scènes (Gemini via Firebase AI Logic)
   imageModel: "gemini-nano-banana-2.1",        
 };

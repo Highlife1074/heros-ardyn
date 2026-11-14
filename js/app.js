@@ -99,7 +99,7 @@ async function createCampaignDialog() {
       h("option", { value: "new:custom" }, "Nouveau monde : mon propre univers"));
   });
   const tone = h("select", {}, h("option", { value: "famille" }, "Famille (dès 10 ans)"), h("option", { value: "ado" }, "Ados"), h("option", { value: "adulte" }, "Adultes"));
-  const style = h("select", {}, h("option", { value: "ouvert" }, "Monde ouvert : vous choisissez où aller"), h("option", { value: "guide" }, "Aventure guidée : une intrigue avec un fil conducteur"));
+  const style = h("select", {}, h("option", { value: "impitoyable" }, "MJ impitoyable : monde indifférent, aucun guidage"), h("option", { value: "ouvert" }, "Monde ouvert : pistes proposées, plus bienveillant"), h("option", { value: "guide" }, "Aventure guidée : une intrigue avec un fil conducteur"));
   const premise = h("textarea", { placeholder: "Facultatif : une envie de départ. Ex. « Les héros escortent une caravane naine à travers les bois de Moncalm. »" });
   const r = await modal("Nouvelle campagne", h("div", {}, h("label", {}, "Nom de la campagne"), name,
     h("label", {}, "Monde"), world, h("p", { class: "small muted" }, "Reprendre un monde existant permet de retrouver tout ce que le MJ y a ajouté lors des campagnes précédentes. Le cadre (ton, magie, interdits) se règle ensuite dans l'écran Monde."),

@@ -303,4 +303,21 @@ await t("MJ externe : l'app n'appelle pas l'API, Claude joue via l'outil en lign
   await F.db.doc(`campaigns/${cid}`).update({ "settings.externalGm": false });
 });
 
+await t("MJ impitoyable : consigne anti-guidage, backlog secret, bilan à la demande", async () => {
+  const cid = F.dump("campaigns/").filter(([p]) => p.split("/").length === 2).map(([p]) => p.split("/")[1])[0];
+  const ctx = await gm.externalContext(cid, "players");
+  assert.match(ctx.context, /IMPITOYABLE/, "le style impitoyable est le style par défaut");
+  assert.match(ctx.context, /AUCUN PNJ-AIMANT/);
+  const r = await gm.externalTool(cid, "backlog", { entries: [{ kind: "offert", text: "Affiche de recrutement clouée sur le puits", who: "tous" }, { kind: "ignore", text: "La caravane est partie sans eux" }, { kind: "bidon", text: "x" }] });
+  assert.match(r, /3 entrée/);
+  const bl = F.raw(`campaigns/${cid}/secret/gm`).backlog;
+  assert.equal(bl.length, 3); assert.equal(bl[2].kind, "consequence", "type inconnu : replié sur « conséquence »");
+  const ctx2 = await gm.externalContext(cid, "players");
+  assert.match(ctx2.context, /Backlog secret du MJ[\s\S]*Piste offerte[\s\S]*Affiche de recrutement/);
+  const owner = F.raw(`campaigns/${cid}`).ownerUid;
+  script.push((req) => ({ content: [{ type: "text", text: "BILAN\n" + req.messages[0].content }] }));
+  const b = await gm.debrief(owner, { campaignId: cid });
+  assert.match(b.text, /Affiche de recrutement/); assert.match(b.text, /La caravane est partie/);
+});
+
 console.log(`\n${ok} tests réussis. Appels modèle simulés : ${calls.length}`);

@@ -33,7 +33,7 @@ export function renderHost(ctx) {
       economy: sel("economy", [["true", "Oui (recommandé) : modèle léger, historique court"], ["false", "Non : meilleur récit, coût plus élevé"]]),
       images: sel("images", [["true", "Oui : une illustration à chaque nouvelle scène"], ["false", "Non"]]),
       imageModel: h("input", { type: "text", value: s.imageModel || "gemini-nano-banana-2.1", maxlength: 60 }),
-      playStyle: sel("playStyle", [["ouvert", "Monde ouvert : pas de scénario imposé, vous choisissez où aller (recommandé)"], ["guide", "Aventure guidée : le MJ mène une intrigue avec un fil conducteur"]]),
+      playStyle: sel("playStyle", [["impitoyable", "MJ impitoyable : monde indifférent, aucun guidage, journal secret pour le bilan (recommandé)"], ["ouvert", "Monde ouvert : pistes proposées, MJ plus bienveillant"], ["guide", "Aventure guidée : le MJ mène une intrigue avec un fil conducteur"]]),
       turnMode: sel("turnMode", [["free", "Libre : chacun écrit quand il veut (recommandé)"], ["round", "Tour de table : chacun son tour, puis le MJ répond à tous"]]),
       autoGmAfterRolls: sel("autoGmAfterRolls", [["true", "Oui, dès que tous les jets demandés sont faits"], ["false", "Non, attendre qu'on appuie sur « Au MJ »"]]),
       houseRules: h("textarea", { rows: 3, maxlength: 2000, placeholder: "Ex. Les potions se boivent en action bonus. Pas de mort définitive avant le niveau 3." }, s.houseRules || ""),
@@ -51,6 +51,8 @@ export function renderHost(ctx) {
     saveKey.onclick = busy(saveKey, async () => { await fn("setApiKey", { campaignId: S.cid, key: keyInput.value }); keyState.textContent = "✅ Clé enregistrée."; toast("Clé enregistrée."); });
     const test = h("button", { class: "btn" }, "Tester le Maître du Jeu");
     test.onclick = busy(test, async () => { const r = await fn("pingGm", { campaignId: S.cid }); modal("Test du Maître du Jeu", h("div", {}, ...r.text.split(" | ").map((l) => h("p", { class: "small" }, l))), [{ label: "OK", class: "btn primary", value: true }]); });
+    const bilan = h("button", { class: "btn" }, "📜 Bilan du MJ");
+    bilan.onclick = busy(bilan, async () => { const r = await fn("debrief", { campaignId: S.cid }); modal("Bilan secret du MJ", h("div", { style: { whiteSpace: "pre-wrap", maxHeight: "60vh", overflowY: "auto" }, class: "small" }, r.text), [{ label: "Fermer", class: "btn primary", value: true }]); });
     const ctl = (label, action, conf) => { const b = h("button", { class: "btn small" }, label);
       b.onclick = busy(b, async () => { if (conf && !(await confirmBox(label, conf))) return; await fn("hostGmControl", { campaignId: S.cid, action }); toast("Fait."); }); return b; };
 
@@ -74,12 +76,12 @@ export function renderHost(ctx) {
         h("p", { class: "small muted" }, "Générées par Gemini dans ton projet Firebase : active « AI Logic » dans la console Firebase (Gemini Developer API). Les modèles d'image demandent le forfait Blaze."),
         h("label", {}, "Modèle d'image"), f.imageModel,
         h("label", {}, "Style de jeu"), f.playStyle,
-        h("p", { class: "small muted" }, "Monde ouvert : le MJ propose des pistes sans en imposer, laisse les héros se séparer et réagit à leurs choix. Aventure guidée : il suit un fil conducteur plus serré."),
+        h("p", { class: "small muted" }, "Impitoyable : aucun PNJ ne vient vers vous, aucune quête, des conséquences réelles ; le MJ tient un journal secret de ce qu'il a offert, de ce que vous avez ignoré et de ce qui avance sans vous. Monde ouvert : plus bienveillant. Aventure guidée : il suit un fil conducteur plus serré."),
         h("label", {}, "Déroulement de la partie"), f.turnMode,
         h("p", { class: "small muted" }, "En tour de table, seul le joueur dont c'est le tour peut écrire ; quand tout le monde a joué (ou passé), le MJ répond à tous d'un coup. En combat, c'est l'ordre d'initiative qui décide. Le hors-jeu reste toujours ouvert."),
         h("label", {}, "Relancer le MJ automatiquement"), f.autoGmAfterRolls, h("label", {}, "Règles maison"), f.houseRules),
       h("section", { class: "panel" }, h("h3", {}, "Progression"), h("label", {}, "Montée de niveau"), f.xpMode, h("label", {}, "Points de vie à chaque niveau"), f.hpMethod),
-      h("div", { class: "row" }, save, test),
+      h("div", { class: "row" }, save, test, bilan),
       h("section", { class: "panel" }, h("h3", {}, "Dépannage"), h("p", { class: "small muted" }, "Si le MJ semble bloqué ou si un jet demandé n'a plus de sens."),
         h("div", { class: "row" }, ctl("Débloquer le MJ", "unlock"), ctl("Terminer le combat", "endCombat", "Retirer l'ordre d'initiative et les ennemis ?"),
           ctl("Effacer la mémoire du MJ", "clearMemory", "Le MJ oubliera les faits notés (le journal reste).")), live.pending),

@@ -72,6 +72,8 @@ const TOOLS = [
       details: { type: "string", description: "Détails utiles pour rester cohérent (lieu, liens, motivations, secrets)" }, revealed: { type: "boolean", description: "true si les joueurs le découvrent maintenant (il entre dans leur codex)" } }, ["category", "name", "summary"]) },
   { name: "world_reveal", description: "Carnet des héros : les héros rencontrent un personnage notable, visitent un lieu important ou apprennent quelque chose sur un élément du monde (de la bible ou déjà ajouté). L'élément apparaît (ou se complète) dans leur carnet. Pour un élément de la bible, donne category et known.",
     input_schema: S({ name: { type: "string" }, category: { type: "string", enum: Object.keys(CATEGORIES) }, known: { type: "string", description: "Ce que les héros en savent maintenant, en une à trois phrases, sans aucun secret" } }, ["name"]) },
+  { name: "backlog", description: "Journal SECRET du MJ pour le bilan de campagne (invisible aux joueurs). À appeler à chaque réponse : position des héros, pistes offertes dans le monde, pistes ignorées, embranchements pris (et voies non prises), événements hors-champ, conséquences. Entrées courtes et factuelles.",
+    input_schema: S({ entries: { type: "array", description: "Une ou plusieurs entrées", items: S({ kind: { type: "string", enum: ["position", "offert", "ignore", "embranchement", "hors_champ", "consequence"] }, text: { type: "string" }, who: { type: "string", description: "Héros concernés (facultatif)" } }, ["kind", "text"]) } }, ["entries"]) },
   { name: "remember", description: "Note un fait important à retenir pour la suite (PNJ, secret, promesse, lieu inventé). Mémoire longue du MJ, invisible aux joueurs.",
     input_schema: S({ fact: { type: "string" } }, ["fact"]) },
 ];
@@ -101,6 +103,9 @@ function charSummary(ch) {
     ch.backstory ? `Histoire : ${ch.backstory.slice(0, 400)}` : null,
   ].filter(Boolean).join("\n");
 }
+
+const BACKLOG_FR = { position: "Position", offert: "Piste offerte", ignore: "Piste ignorée", embranchement: "Embranchement", hors_champ: "Hors champ", consequence: "Conséquence" };
+const fmtBacklog = (e) => `- [${BACKLOG_FR[e.kind] || e.kind}${e.who ? " · " + e.who : ""}${e.scene ? " · " + e.scene : ""}] ${e.text}`;
 
 function fmtLog(e) {
   const t = e.type;
@@ -141,12 +146,13 @@ async function buildContext(cid, c, chars, secret, reason) {
   const partyLevel = chars.length ? Math.round(chars.reduce((a, x) => a + x.level, 0) / chars.length) : 1;
   const parts = [];
   parts.push(`## Déroulement\n${s.turnMode === "round" && !c.state?.combat?.active ? TURN_GM_RULES.round + "\n" : ""}${TURN_GM_RULES.combat}`);
-  parts.push(`## Style de jeu\n${PLAYSTYLE[s.playStyle] || PLAYSTYLE.ouvert}`);
+  parts.push(`## Style de jeu\n${PLAYSTYLE[s.playStyle] || PLAYSTYLE.impitoyable}`);
   parts.push(`## Paramètres de la table\n${TONE[s.tone] || TONE.famille}\n${DIFFICULTY[s.difficulty] || DIFFICULTY.normal}\n${NARRATION[s.economy ? "courte" : s.narration] || NARRATION.moyenne}\nProgression : ${s.xpMode === "milestone" ? "jalons (level_up_ready)" : "points d'expérience (award_xp)"}.${s.houseRules ? "\nRègles maison : " + s.houseRules : ""}${c.premise ? "\nPrémisse de campagne voulue par l'hôte : " + c.premise : ""}`);
   parts.push(`## Groupe (${chars.length} héros, niveau moyen ${partyLevel})\n${chars.map(charSummary).join("\n\n") || "Aucun héros créé pour l'instant."}`);
   if (st.scene?.title) parts.push(`## Scène actuelle\n${st.scene.title}${st.scene.location ? " — " + st.scene.location : ""}${st.scene.mood ? " (" + st.scene.mood + ")" : ""}`);
   if ((st.quests || []).length) parts.push(`## Quêtes\n${st.quests.map((q) => `- [${q.status}] ${q.title}${q.notes ? " : " + q.notes : ""}`).join("\n")}`);
   if ((secret.memory || []).length) parts.push(`## Mémoire du MJ (faits établis)\n${secret.memory.slice(-60).map((m) => "- " + m).join("\n")}`);
+  if ((secret.backlog || []).length) parts.push(`## Backlog secret du MJ (ce qui a été offert, ignoré, ce qui avance hors champ — réajuste le monde en conséquence)\n${secret.backlog.slice(-40).map(fmtBacklog).join("\n")}`);
   if (st.summary) parts.push(`## Résumé de la campagne jusqu'ici\n${st.summary}`);
   const cb = st.combat;
   if (cb?.active) {
@@ -165,7 +171,9 @@ async function buildContext(cid, c, chars, secret, reason) {
   parts.push(`## Journal récent\n${log.map(fmtLog).join("\n") || "(vide)"}`);
   const gmSpoke = log.some((e) => e.type === "gm") || !!st.summary;
   let ask;
-  if (!gmSpoke) ask = s.playStyle === "guide"
+  if (!gmSpoke) ask = s.playStyle === "impitoyable"
+    ? "La partie commence. Pose un lieu et un moment, avec ceux qui s'y trouvent, décrits tous avec le même niveau de détail (une touche chacun, aucun mis en valeur), et laisse les héros là où leurs histoires les placent, ensemble ou non. Aucun PNJ ne s'adresse à eux, aucune quête, aucune mission. Les pistes existent seulement comme éléments passifs du décor, mêlées à du bruit sans importance. Note-les avec backlog (position, offert). Utilise update_scene, puis demande seulement : « Que fait chacun ? »"
+    : s.playStyle === "guide"
     ? "La partie commence. Ouvre l'aventure : plante le décor de façon captivante, présente brièvement la situation de départ qui réunit les héros (en t'appuyant sur leurs histoires), utilise update_scene et update_quest, puis demande ce qu'ils font."
     : "La partie commence. Plante un lieu vivant et une situation de départ simple (pas une mission imposée), en t'appuyant sur les histoires des héros : ils peuvent y être ensemble ou avoir chacun leur raison d'y être. Fais sentir 3 accroches différentes dans le décor (rumeur, PNJ, détail étrange…) sans en désigner une. N'ouvre aucune quête pour l'instant. Utilise update_scene, puis demande simplement ce que fait chaque héros, en rappelant qu'ils sont libres d'aller où ils veulent.";
   else if (reason === "rolls") ask = "Tous les jets demandés ont été faits. Narre leurs conséquences et poursuis.";
@@ -447,6 +455,15 @@ async function execTool(ctx, name, input) {
       if (!ctx.world) return "Erreur : pas de monde lié.";
       return revealEntry(ctx.world, cid, input);
     }
+    case "backlog": {
+      const now = Date.now();
+      const add = (Array.isArray(input.entries) ? input.entries : [input]).filter((e) => e && e.text).map((e) => ({
+        at: now, kind: ["position", "offert", "ignore", "embranchement", "hors_champ", "consequence"].includes(e.kind) ? e.kind : "consequence",
+        text: str(e.text, 400), who: str(e.who || "", 80), scene: ctx.c.state?.scene?.title || "" }));
+      ctx.secret.backlog = [...(ctx.secret.backlog || []), ...add].slice(-400);
+      await db.doc(`campaigns/${cid}/secret/gm`).update({ backlog: ctx.secret.backlog });
+      return `Backlog : ${add.length} entrée(s) notée(s).`;
+    }
     case "remember": {
       ctx.secret.memory = [...(ctx.secret.memory || []), str(input.fact, 300)].slice(-120);
       await db.doc(`campaigns/${cid}/secret/gm`).update({ memory: ctx.secret.memory });
@@ -650,6 +667,28 @@ export async function hostGmControl(uid, { campaignId, action, requestId }) {
   }
   if (action === "clearMemory") { await db.doc(`campaigns/${campaignId}/secret/gm`).update({ memory: [] }); return { ok: true }; }
   throw new HttpsError("invalid-argument", "Action inconnue.");
+}
+
+/** Bilan de campagne à la demande de l'hôte : où sont passés les héros, pistes ratées, embranchements, ce qui avançait sans eux. */
+export async function debrief(uid, { campaignId }) {
+  const { data: c } = await loadCampaign(campaignId, uid, { ownerOnly: true });
+  const secret = (await db.doc(`campaigns/${campaignId}/secret/gm`).get()).data() || {};
+  const backlog = secret.backlog || [];
+  const st = c.state || {};
+  const chars = (await db.collection(`campaigns/${campaignId}/characters`).get()).docs.map((d) => d.data());
+  const raw = [
+    `# Héros\n${chars.map((x) => `- ${x.name} (${R.species[x.species]?.nameFr || x.species} ${R.classes[x.class]?.nameFr || x.class} niv. ${x.level}) — ${x.hp?.current}/${x.hp?.max} PV${x.alive === false ? " — MORT" : ""}`).join("\n") || "(aucun)"}`,
+    st.summary ? `# Résumé\n${st.summary}` : "",
+    (st.quests || []).length ? `# Quêtes déclarées par les joueurs\n${st.quests.map((q) => `- [${q.status}] ${q.title}${q.notes ? " : " + q.notes : ""}`).join("\n")}` : "",
+    `# Backlog du MJ (${backlog.length} entrées)\n${backlog.map((e) => `- ${new Date(e.at).toLocaleDateString("fr-FR")} ${fmtBacklog(e)}`).join("\n") || "(vide : le MJ n'a encore rien consigné)"}`,
+    (secret.memory || []).length ? `# Faits établis\n${secret.memory.map((m) => "- " + m).join("\n")}` : "",
+  ].filter(Boolean).join("\n\n");
+  if ((!backlog.length && !st.summary) || !platform.apiKey || c.settings?.externalGm) return { text: raw, raw: true };
+  const s = { ...DEFAULT_SETTINGS, ...(c.settings || {}) };
+  const resp = await anthropic().messages.create({ model: s.model, max_tokens: 3500,
+    system: "Tu es le Maître du Jeu qui fait le bilan SECRET de la campagne pour l'hôte, à partir du backlog, du résumé et des faits établis. Écris en français, sec, factuel, sans flatterie et sans consoler. Sections : 1) Où en sont les héros (lieu, état, objectifs que les JOUEURS ont énoncés) ; 2) Ce qu'ils ont fait de marquant ; 3) Pistes offertes puis ignorées ou ratées, avec ce qu'elles auraient donné ; 4) Embranchements pris et voies non prises ; 5) Ce qui avançait hors champ sans eux et où ça en est ; 6) Conséquences durables de leurs actes. N'invente rien qui ne soit pas dans les données ; signale ce qui manque.",
+    messages: [{ role: "user", content: raw }] });
+  return { text: resp.content.filter((b) => b.type === "text").map((b) => b.text).join("").trim() || raw };
 }
 
 export async function translate(uid, { text, campaignId }) {

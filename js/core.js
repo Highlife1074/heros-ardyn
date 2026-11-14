@@ -24,7 +24,7 @@ initializeAppCheck(fbApp, {
 export const auth = getAuth(fbApp);
 // ignoreUndefinedProperties : un champ vide ne fait plus échouer une écriture.
 export const fs = initializeFirestore(fbApp, { ignoreUndefinedProperties: true, experimentalForceLongPolling: true });
-export const APP_VERSION = "2026-11-02 a";
+export const APP_VERSION = "2026-11-14 a";
 
 // ---------------------------------------------------------------- Plateforme pour la logique de jeu (js/server)
 // Même interface que l'ancienne version serveur : la logique n'a pas eu besoin d'être réécrite.
@@ -139,7 +139,7 @@ const ACTIONS = {
   useResource: () => server.characters.useResource, hostAdjust: () => server.characters.hostAdjust,
   roll: () => server.dice.roll,
   submitTurn: () => server.turns.submitTurn, closeRound: () => server.turns.closeRound,
-  askGm: () => server.gm.askGm, hostGmControl: () => server.gm.hostGmControl, translate: () => server.gm.translate, pingGm: () => server.gm.pingGm,
+  askGm: () => server.gm.askGm, debrief: () => server.gm.debrief, hostGmControl: () => server.gm.hostGmControl, translate: () => server.gm.translate, pingGm: () => server.gm.pingGm,
   consolidateWorld: () => server.gm.consolidateWorld, getWorldVersion: () => server.gm.getWorldVersion,
   createWorld: () => server.worlds.createWorld, updateWorld: () => server.worlds.updateWorld, editWorldEntry: () => server.worlds.editEntry,
 };

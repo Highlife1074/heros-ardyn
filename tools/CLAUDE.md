@@ -19,6 +19,9 @@ Tout est en français. Les secrets de la bible ne doivent jamais être révélé
 6. Termine TOUJOURS par le récit : `node tools/mj.mjs say CID "…ton récit…"` (ou via stdin pour un texte long).
    Cela publie le texte, ouvre le tour suivant et lève l'attente. Puis reviens à l'étape 3.
 
+## Backlog secret
+Avec le style « impitoyable », appelle `tool CID backlog '{"entries":[{"kind":"position|offert|ignore|embranchement|hors_champ|consequence","text":"…"}]}'` à chaque réponse, avant `say`. Il alimente le bilan de campagne (jamais montré aux joueurs en cours de partie).
+
 ## Règles de style
 - Respecte les consignes lues dans `context` (ton, longueur des récits, tour de table, combat : un héros à la fois).
 - Ne parle pas à la place des joueurs. Termine en décrivant la situation, sans choisir pour eux.
